@@ -12,7 +12,6 @@ if 'current_page' not in st.session_state: st.session_state.current_page = 1
 
 st.set_page_config(page_title="LO-SCOUT TITAN", layout="wide")
 
-# Hotlink protection bypass + CSS styling
 st.markdown("""
     <meta name="referrer" content="no-referrer">
     <style>
@@ -40,7 +39,6 @@ st.markdown("""
 
 # --- 2. THE REINFORCED IMAGE ENGINE ---
 def get_clean_thumb(node):
-    """Safely deep dives into JSON node to find the best possible image URL."""
     try:
         main_img = node.get('mainImage') or {}
         urls = main_img.get('urls') or {}
@@ -52,13 +50,17 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
     base_url = "https://www.freeones.com/performers"
     
+    # EXACT MATCH TO LIVE SITE URL STRUCTURE
     params = [
+        "q=", # Mandatory empty search param
         f"page={page}",
         f"f[performerType]={'babe' if p_type == 'Babe' else 'male'}",
         f"r[appearance.metric.height]={h_range[0]},{h_range[1]}",
         f"r[appearance.metric.weight]={w_range[0]},{w_range[1]}",
         f"r[age]={a_range[0]},{a_range[1]}",
-        "filter_mode[global]=and", "s=rank.currentRank", "o=desc"
+        "filter_mode[global]=and", 
+        "s=rank.currentRank", 
+        "o=desc"
     ]
     
     if p_type == "Male":
@@ -66,7 +68,11 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
         params.append(f"r[appearance.metric.penis_thickness]={p_thick[0]},{p_thick[1]}")
     
     if selected_cats:
-        for cat in selected_cats: params.append(f"f[categories]={cat.replace(' ', '+')}")
+        for cat in selected_cats: 
+            # Use %20 instead of + for spaces
+            params.append(f"f[categories]={urllib.parse.quote(cat)}")
+        # Mandatory when categories are used
+        params.append("filter_mode[categories]=and")
 
     full_url = f"{base_url}?{'&'.join(params)}"
     
@@ -79,7 +85,6 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
         soup = BeautifulSoup(resp.text, 'html.parser')
         results = []
         
-        # PRIMARY: JSON SCRAPE (Highest Image Success Rate)
         script = soup.find('script', id='__NEXT_DATA__')
         if script:
             js = json.loads(script.string)
@@ -96,7 +101,6 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
                         "url": f"https://www.freeones.com/{node.get('slug')}/feed"
                     })
         
-        # SECONDARY: HTML SCRAPE (Fallback if JSON shifts structure)
         if not results:
             cards = soup.select('div[data-test="performer-item"]')
             for card in cards:
@@ -150,7 +154,6 @@ if st.session_state.current_results:
     for i, item in enumerate(st.session_state.current_results):
         with cols[i % 4]:
             st.markdown('<div class="performer-card">', unsafe_allow_html=True)
-            # Img Container with eager loading
             st.markdown(f'''
                 <div class="img-box">
                     <img src="{item["img"]}" loading="eager" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x400?text=Broken+Link';">
@@ -159,7 +162,6 @@ if st.session_state.current_results:
             
             st.write(f"**{item['name']}**")
             
-            # Safe URL encoding for tube searches
             q_safe = urllib.parse.quote_plus(item['name'])
             xv_dur = "10min_more" if min_m >= 10 else "allduration"
             
@@ -167,7 +169,7 @@ if st.session_state.current_results:
                 <div style="margin: 10px 0;">
                     <a class="tube-btn" href="https://www.xvideos.com/?k={q_safe}&durf={xv_dur}" target="_blank">XV</a>
                     <a class="tube-btn" href="https://www.eporner.com/search/{q_safe}/?min_len={min_m}" target="_blank">EP</a>
-                    <a class="tube-btn" href="https://sexyprawn.com/search/all/{q_safe}/?duration={min_m}-120" target="_blank">SP</a>
+                    <a class="tube-btn" href="https://sxyprn.com/search/all/{q_safe}/?duration={min_m}-120" target="_blank">SP</a>
                     <a class="tube-btn" href="https://xmoviesforyou.com/?s={q_safe}" target="_blank">XMFY</a>
                 </div>
             """, unsafe_allow_html=True)
@@ -175,18 +177,4 @@ if st.session_state.current_results:
             st.markdown(f"[FreeOnes Profile]({item['url']})")
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("System Ready. Adjust filters and execute scan below.")
-
-# LOAD / SCAN BUTTON
-st.divider()
-btn_label = "🚀 LOAD NEXT BATCH" if st.session_state.current_results else "🚀 EXECUTE SCAN"
-
-if st.button(btn_label, use_container_width=True):
-    with st.spinner(f"Fetching models (Page {st.session_state.current_page})..."):
-        batch = fetch_titan_models(p_type, h_range, w_range, a_range, selected_tags, st.session_state.current_page, p_l, p_t)
-        if batch:
-            st.session_state.current_results.extend(batch)
-            st.session_state.current_page += 1
-            st.rerun()
-        else:
-            st.warning("No more results found matching these criteria.")
+    st.info("System Ready
