@@ -6,7 +6,7 @@ import json
 import urllib.parse
 
 # --- 1. SYSTEM CONFIG ---
-st.set_page_config(page_title="LO-SCOUT TITAN V7", layout="wide")
+st.set_page_config(page_title="LO-SCOUT TITAN V8", layout="wide")
 
 if 'current_results' not in st.session_state: st.session_state.current_results = []
 if 'current_page' not in st.session_state: st.session_state.current_page = 1
@@ -20,28 +20,25 @@ st.markdown("""
         background: #111827; border: 1px solid #1f2937; border-radius: 12px;
         padding: 12px; text-align: center; margin-bottom: 20px; min-height: 540px;
     }
-    .img-box { width: 100%; height: 300px; overflow: hidden; border-radius: 8px; background: #000; margin-bottom: 10px; }
+    .img-box { width: 100%; height: 320px; overflow: hidden; border-radius: 8px; background: #000; margin-bottom: 10px; border: 1px solid #333; }
     .img-box img { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Tube Site Grid */
     .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
     .tube-btn {
-        background: #1f2937; color: #00f2ff !important; padding: 8px 4px; 
-        border-radius: 4px; text-decoration: none; font-weight: 900; font-size: 0.75rem;
-        border: 1px solid #374151; transition: 0.2s; text-align: center;
+        background: #1f2937; color: #00f2ff !important; padding: 8px 2px; 
+        border-radius: 4px; text-decoration: none; font-weight: 900; font-size: 0.7rem;
+        border: 1px solid #374151; text-align: center; display: block;
     }
-    .tube-btn:hover { border-color: #00f2ff; background: #0b0e14; }
-    .profile-link { font-size: 0.7rem; color: #6b7280; text-decoration: none; margin-top: 10px; display: block; }
+    .tube-btn:hover { border-color: #00f2ff; background: #000; }
+    .name-text { font-size: 1.1rem; font-weight: bold; color: #fff; height: 30px; overflow: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. PRECISION ENGINE ---
+# --- 2. THE ENGINE ---
 def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_len, p_thick):
-    scraper = cloudscraper.create_scraper(
-        browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
-    )
+    # Matches your S24 Ultra Trace fingerprint
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'android', 'desktop': False})
     
-    # URL construction to match your working trace
     params = [
         "q=", f"page={page}",
         f"f[performerType]={'babe' if p_type == 'Babe' else 'male'}"
@@ -73,61 +70,62 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_len, p_thick):
         if resp.status_code != 200: return []
         
         soup = BeautifulSoup(resp.text, 'html.parser')
-        results = []
-        seen = set()
-
-        # CONTAINED EXTRACTION (Fixes thumbnail mix-ups)
-        # We find every performer "item" block first
-        containers = soup.select('[data-test="performer-item"], [class*="performer-item"]')
+        batch_results = []
         
-        for box in containers:
-            link_tag = box.find('a', href=re.compile(r'/[^/]+/feed'))
-            if not link_tag: continue
-            
-            slug = link_tag.get('href').split('/')[1]
-            name = slug.replace('-', ' ').title()
-            
-            if name not in seen:
-                # Find image ONLY within this specific box
-                img_tag = box.find('img')
-                img_url = ""
-                if img_tag:
-                    # Check multiple possible sources for lazy-loaded images
-                    img_url = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('srcset', '').split(' ')[0]
+        # KEY FIX: Scrape by individual card container only
+        cards = soup.select('[data-test="performer-item"]')
+        
+        for card in cards:
+            try:
+                # 1. Grab link/name
+                link_el = card.find('a', href=re.compile(r'/[^/]+/feed'))
+                if not link_el: continue
                 
-                results.append({"name": name, "img": img_url, "slug": slug})
-                seen.add(name)
+                slug = link_el.get('href').split('/')[1]
+                name = slug.replace('-', ' ').title()
+                
+                # 2. Grab image FROM THIS SPECIFIC CARD ONLY
+                img_el = card.find('img')
+                # Check for various lazy-load attributes
+                img_src = ""
+                if img_el:
+                    img_src = img_el.get('data-src') or img_el.get('src') or img_el.get('srcset', '').split(' ')[0]
+
+                if name and slug:
+                    batch_results.append({"name": name, "img": img_src, "slug": slug})
+            except:
+                continue
                     
-        return results
-    except Exception:
+        return batch_results
+    except:
         return []
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
-    st.title("🔭 TITAN COMMAND")
+    st.title("🔭 TITAN V8")
     p_type = st.selectbox("Type", ["Babe", "Male"])
-    if st.button("🔄 CLEAR ALL", use_container_width=True):
+    if st.button("🔄 FULL SYSTEM RESET", use_container_width=True):
         st.session_state.current_results = []
         st.session_state.current_page = 1
         st.rerun()
 
-    st.subheader("📏 Anatomical Filters")
-    h_range = st.slider("Height (cm)", 80, 230, (88, 180))
-    w_range = st.slider("Weight (kg)", 30, 180, (50, 110))
+    st.subheader("📏 Stats")
+    h_range = st.slider("Height", 80, 230, (88, 180))
+    w_range = st.slider("Weight", 30, 180, (50, 110))
     a_range = st.slider("Age", 18, 80, (18, 30))
     
     p_l, p_t = (0,0), (0,0)
     if p_type == "Male":
-        p_l = st.slider("Length (cm)", 5, 40, (18, 28))
-        p_t = st.slider("Thickness (cm)", 2, 15, (4, 8))
+        p_l = st.slider("Penis Length", 5, 40, (18, 28))
+        p_t = st.slider("Penis Thickness", 2, 15, (4, 8))
 
-    st.subheader("📺 Video Duration")
+    st.subheader("📺 Video Length")
     min_m = st.slider("Min Minutes", 0, 120, 10)
     
-    niches_list = ["Small Tits", "Chubby", "Big Boobs", "Teen", "Threesome", "Blowjobs", "Anal", "Lingerie", "POV", "Feet", "Big Butt", "MILF", "Amateur", "Latina", "Asian", "Ebony"]
-    selected_niches = st.multiselect("Niches", niches_list, default=["Small Tits"])
+    niches = ["Small Tits", "Chubby", "Big Boobs", "Teen", "Anal", "MILF", "Latina", "Asian", "Ebony", "Amateur"]
+    selected_niches = st.multiselect("Niches", niches, default=["Small Tits"])
 
-# --- 4. MAIN INTERFACE ---
+# --- 4. MAIN FEED ---
 if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
@@ -140,7 +138,7 @@ if st.session_state.current_results:
                     <div class="img-box">
                         <img src="{item["img"]}" onerror="this.src='https://via.placeholder.com/300x400?text=No+Preview';">
                     </div>
-                    <div style="height: 40px; overflow: hidden;"><strong>{item["name"]}</strong></div>
+                    <div class="name-text">{item["name"]}</div>
                     
                     <div class="btn-grid">
                         <a class="tube-btn" href="https://www.xvideos.com/?k={q}&durf={xv_dur}" target="_blank">XV</a>
@@ -148,20 +146,19 @@ if st.session_state.current_results:
                         <a class="tube-btn" href="https://sexyprawn.com/search/all/{q}/?duration={min_m}-120" target="_blank">SP</a>
                         <a class="tube-btn" href="https://xmoviesforyou.com/?s={q}" target="_blank">XMFY</a>
                     </div>
-                    
-                    <a class="profile-link" href="https://www.freeones.com/{item['slug']}/feed" target="_blank">FreeOnes Profile</a>
+                    <div style="margin-top:15px">
+                        <a href="https://www.freeones.com/{item['slug']}/feed" target="_blank" style="color:#555; font-size:12px;">Profile</a>
+                    </div>
                 </div>
             ''', unsafe_allow_html=True)
 else:
-    st.info("System Ready. Adjust filters and execute scan.")
+    st.info("System Ready. Execute scan below.")
 
 st.divider()
 if st.button("🚀 EXECUTE SCAN / LOAD MORE", use_container_width=True):
-    with st.spinner(f"Pulling Page {st.session_state.current_page}..."):
+    with st.spinner(f"Scraping Page {st.session_state.current_page}..."):
         new_batch = fetch_data(p_type, h_range, w_range, a_range, selected_niches, st.session_state.current_page, p_l, p_t)
         if new_batch:
             st.session_state.current_results.extend(new_batch)
-            st.session_state.current_page += 1
-            st.rerun()
-        else:
-            st.warning("No data found. Broaden your height/weight sliders.")
+            st.session_state.current_page
+            
