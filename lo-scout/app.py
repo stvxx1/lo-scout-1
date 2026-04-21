@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 import json
 import urllib.parse
+import time
 
 # --- 1. PERSISTENT STORAGE ---
 if 'current_results' not in st.session_state: st.session_state.current_results = []
@@ -11,7 +12,6 @@ if 'current_page' not in st.session_state: st.session_state.current_page = 1
 
 st.set_page_config(page_title="LO-SCOUT TITAN", layout="wide")
 
-# referrer meta tag is key for thumbnail loading
 st.markdown("""
     <meta name="referrer" content="no-referrer">
     <style>
@@ -19,12 +19,9 @@ st.markdown("""
     section[data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #00f2ff; }
     .performer-card {
         background: #1f2937; border: 1px solid #374151; border-radius: 12px;
-        padding: 12px; text-align: center; margin-bottom: 20px; min-height: 460px;
+        padding: 12px; text-align: center; margin-bottom: 20px; min-height: 440px;
     }
-    .img-box { 
-        width: 100%; height: 300px; overflow: hidden; border-radius: 8px; 
-        background: #111827;
-    }
+    .img-box { width: 100%; height: 280px; overflow: hidden; border-radius: 8px; background: #111827; }
     .img-box img { width: 100%; height: 100%; object-fit: cover; }
     .tube-btn {
         background: #374151; color: #00f2ff !important; padding: 5px 10px; 
@@ -34,13 +31,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE CORE ENGINE ---
+# --- 2. RECURSIVE JSON HUNTER ---
+def find_key_recursive(data, target_key):
+    """Digs through nested dictionaries/lists to find a specific key."""
+    if isinstance(data, dict):
+        if target_key in data:
+            return data[target_key]
+        for key, value in data.items():
+            result = find_key_recursive(value, target_key)
+            if result: return result
+    elif isinstance(data, list):
+        for item in data:
+            result = find_key_recursive(item, target_key)
+            if result: return result
+    return None
+
 def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p_len, p_thick):
-    # Cloudscraper mimics a real browser to bypass Cloudflare
-    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
-    base_url = "https://www.freeones.com/performers"
+    # Mimic a high-authority browser
+    scraper = cloudscraper.create_scraper(
+        browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False}
+    )
     
-    # Restoring the exact working parameter list
+    # Building the URL exactly as the browser does
     params = [
         "q=", 
         f"page={page}",
@@ -62,55 +74,59 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
             params.append(f"f[categories]={urllib.parse.quote(cat)}")
         params.append("filter_mode[categories]=and")
 
-    full_url = f"{base_url}?{'&'.join(params)}"
+    full_url = f"https://www.freeones.com/performers?{'&'.join(params)}"
     
     try:
-        resp = scraper.get(full_url, timeout=15)
-        if resp.status_code != 200: return []
+        # Added a small jitter to avoid instant detection
+        time.sleep(0.5)
+        resp = scraper.get(full_url, timeout=20)
+        if resp.status_code != 200:
+            return []
             
         soup = BeautifulSoup(resp.text, 'html.parser')
         results = []
-        seen_names = set()
+        seen = set()
 
-        # Hybrid Scrape Logic: Check JSON first (best images), then HTML
-        script = soup.find('script', id='__NEXT_DATA__')
-        if script:
+        # STEP 1: JSON EXTRACTION (Recursive)
+        script_tag = soup.find('script', id='__NEXT_DATA__')
+        if script_tag:
             try:
-                js = json.loads(script.string)
-                # Flexible path hunting in JSON tree
-                data_path = js.get('props', {}).get('pageProps', {}).get('data', {}).get('performers', {}).get('edges', [])
-                for e in data_path:
-                    node = e.get('node', {})
-                    name = node.get('name')
-                    if name:
-                        img_urls = node.get('mainImage', {}).get('urls', {})
-                        img = img_urls.get('large') or img_urls.get('small') or ""
-                        results.append({
-                            "name": name,
-                            "img": img,
-                            "url": f"https://www.freeones.com/{node.get('slug')}/feed"
-                        })
-                        seen_names.add(name)
+                js_data = json.loads(script_tag.string)
+                # Look for 'edges' inside 'performers' wherever it might be
+                performers_list = find_key_recursive(js_data, 'performers')
+                if performers_list and 'edges' in performers_list:
+                    for edge in performers_list['edges']:
+                        node = edge.get('node', {})
+                        name = node.get('name')
+                        if name and name not in seen:
+                            imgs = node.get('mainImage', {}).get('urls', {})
+                            results.append({
+                                "name": name,
+                                "img": imgs.get('large') or imgs.get('small') or "",
+                                "url": f"https://www.freeones.com/{node.get('slug')}/feed"
+                            })
+                            seen.add(name)
             except: pass
 
-        # HTML Fallback
+        # STEP 2: HTML FALLBACK (If JSON is obfuscated)
         if not results:
-            cards = soup.select('div[data-test="performer-item"]')
-            for card in cards:
-                link = card.find('a', href=re.compile(r'/[^/]+/feed'))
+            items = soup.select('div[data-test="performer-item"], [class*="performer-item"]')
+            for item in items:
+                link = item.find('a', href=re.compile(r'/[^/]+/feed'))
                 if link:
                     name = link.get('href').split('/')[1].replace('-', ' ').title()
-                    if name not in seen_names:
-                        img_tag = card.find('img')
+                    if name not in seen:
+                        img_tag = item.find('img')
                         img = img_tag.get('data-src') or img_tag.get('src') or ""
                         results.append({
                             "name": name,
                             "img": img,
                             "url": f"https://www.freeones.com{link.get('href')}"
                         })
-                        seen_names.add(name)
+                        seen.add(name)
         return results
-    except:
+    except Exception as e:
+        st.error(f"Scrape Error: {e}")
         return []
 
 # --- 3. SIDEBAR ---
@@ -118,12 +134,11 @@ with st.sidebar:
     st.title("🔭 TITAN COMMAND")
     p_type = st.selectbox("Type", ["Babe", "Male"])
     
-    if st.button("🔄 RESET & NEW SCAN", use_container_width=True):
+    if st.button("🔄 CLEAR & RESTART"):
         st.session_state.current_results = []
         st.session_state.current_page = 1
         st.rerun()
 
-    st.subheader("📏 Anatomy Specs")
     h_range = st.slider("Height (cm)", 100, 230, (140, 190))
     w_range = st.slider("Weight (kg)", 30, 180, (50, 100))
     a_range = st.slider("Age", 18, 80, (18, 30))
@@ -134,6 +149,7 @@ with st.sidebar:
         p_t = st.slider("Thickness (cm)", 2, 15, (4, 8))
 
     min_m = st.slider("Min Minutes", 0, 120, 10)
+    # Only use one niche at a time if results are failing
     tags_list = ["Small Tits", "Chubby", "Big Boobs", "Teen", "Threesome", "Blowjobs", "Anal", "Lingerie", "POV", "Feet", "Big Butt", "MILF", "Amateur", "Latina", "Asian", "Ebony"]
     selected_tags = st.multiselect("Niches", tags_list)
 
@@ -142,34 +158,25 @@ if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
         with cols[i % 4]:
-            st.markdown('<div class="performer-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="img-box"><img src="{item["img"]}" onerror="this.src=\'https://via.placeholder.com/300x400?text=No+Thumb\';"></div>', unsafe_allow_html=True)
-            st.write(f"**{item['name']}**")
-            
-            q_safe = urllib.parse.quote_plus(item['name'])
-            xv_dur = "10min_more" if min_m >= 10 else "allduration"
-            
-            st.markdown(f"""
-                <div style="margin: 8px 0;">
-                    <a class="tube-btn" href="https://www.xvideos.com/?k={q_safe}&durf={xv_dur}" target="_blank">XV</a>
-                    <a class="tube-btn" href="https://www.eporner.com/search/{q_safe}/?min_len={min_m}" target="_blank">EP</a>
-                    <a class="tube-btn" href="https://sexyprawn.com/search/all/{q_safe}/?duration={min_m}-120" target="_blank">SP</a>
-                    <a class="tube-btn" href="https://xmoviesforyou.com/?s={q_safe}" target="_blank">XMFY</a>
+            st.markdown(f'''
+                <div class="performer-card">
+                    <div class="img-box"><img src="{item["img"]}" onerror="this.src='https://via.placeholder.com/300x400?text=No+Thumbnail';"></div>
+                    <p><strong>{item['name']}</strong></p>
+                    <a class="tube-btn" href="https://www.xvideos.com/?k={item['name'].replace(' ', '+')}&durf=10min_more" target="_blank">XV</a>
+                    <a class="tube-btn" href="https://sexyprawn.com/search/all/{item['name'].replace(' ', '+')}/" target="_blank">SP</a>
+                    <br><br><a href="{item['url']}" target="_blank" style="color:#00f2ff; font-size:12px;">Profile</a>
                 </div>
-            """, unsafe_allow_html=True)
-            st.markdown(f"[Profile]({item['url']})")
-            st.markdown('</div>', unsafe_allow_html=True)
+            ''', unsafe_allow_html=True)
 else:
-    st.info("System Ready. Execute scan below.")
+    st.info("No data in buffer. Adjust filters and execute scan.")
 
 st.divider()
-btn_label = "🚀 LOAD NEXT BATCH" if st.session_state.current_results else "🚀 EXECUTE SCAN"
-if st.button(btn_label, use_container_width=True):
-    with st.spinner(f"Scanning Page {st.session_state.current_page}..."):
+if st.button("🚀 EXECUTE / LOAD NEXT BATCH", use_container_width=True):
+    with st.spinner("Fetching..."):
         batch = fetch_titan_models(p_type, h_range, w_range, a_range, selected_tags, st.session_state.current_page, p_l, p_t)
         if batch:
             st.session_state.current_results.extend(batch)
             st.session_state.current_page += 1
             st.rerun()
         else:
-            st.warning("No results found. Try broadening your filters.")
+            st.warning("No results found. Try reducing the number of Niches or broadening the Height/Weight sliders.")
