@@ -169,7 +169,7 @@ if st.session_state.current_results:
                 <div style="margin: 10px 0;">
                     <a class="tube-btn" href="https://www.xvideos.com/?k={q_safe}&durf={xv_dur}" target="_blank">XV</a>
                     <a class="tube-btn" href="https://www.eporner.com/search/{q_safe}/?min_len={min_m}" target="_blank">EP</a>
-                    <a class="tube-btn" href="https://sxyprn.com/search/all/{q_safe}/?duration={min_m}-120" target="_blank">SP</a>
+                    <a class="tube-btn" href="https://sexyprawn.com/search/all/{q_safe}/?duration={min_m}-120" target="_blank">SP</a>
                     <a class="tube-btn" href="https://xmoviesforyou.com/?s={q_safe}" target="_blank">XMFY</a>
                 </div>
             """, unsafe_allow_html=True)
@@ -177,4 +177,17 @@ if st.session_state.current_results:
             st.markdown(f"[FreeOnes Profile]({item['url']})")
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("System Ready
+    st.info("System Ready. Adjust filters and execute scan below.")
+
+st.divider()
+btn_label = "🚀 LOAD NEXT BATCH" if st.session_state.current_results else "🚀 EXECUTE SCAN"
+
+if st.button(btn_label, use_container_width=True):
+    with st.spinner(f"Fetching models (Page {st.session_state.current_page})..."):
+        batch = fetch_titan_models(p_type, h_range, w_range, a_range, selected_tags, st.session_state.current_page, p_l, p_t)
+        if batch:
+            st.session_state.current_results.extend(batch)
+            st.session_state.current_page += 1
+            st.rerun()
+        else:
+            st.warning("No more results found matching these criteria.")
