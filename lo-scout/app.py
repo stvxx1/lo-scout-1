@@ -16,10 +16,10 @@ st.markdown("""
     section[data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #00f2ff; }
     .performer-card {
         background: #1f2937; border: 1px solid #374151; border-radius: 12px;
-        padding: 12px; text-align: center; margin-bottom: 15px; min-height: 450px;
+        padding: 12px; text-align: center; margin-bottom: 15px; min-height: 420px;
     }
-    .img-container { width: 100%; height: 280px; overflow: hidden; border-radius: 8px; margin-bottom: 10px; }
-    .img-container img { width: 100%; height: 100%; object-fit: cover; }
+    .img-box { width: 100%; height: 250px; overflow: hidden; border-radius: 8px; margin-bottom: 10px; background: #111827; }
+    .img-box img { width: 100%; height: 100%; object-fit: cover; }
     .tube-btn {
         background: #374151; color: #00f2ff !important; padding: 4px 8px; 
         border-radius: 4px; text-decoration: none; font-size: 0.75rem; font-weight: bold;
@@ -28,9 +28,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE REINFORCED ENGINE ---
+# --- 2. REINFORCED HYBRID ENGINE ---
 def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p_len=None, p_thick=None):
-    scraper = cloudscraper.create_scraper()
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
     base_url = "https://www.freeones.com/performers"
     
     params = [
@@ -52,81 +52,70 @@ def fetch_titan_models(p_type, h_range, w_range, a_range, selected_cats, page, p
     full_url = f"{base_url}?{'&'.join(params)}"
     
     try:
-        # High-authority header to look like a real desktop browser
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-        resp = scraper.get(full_url, headers=headers, timeout=20)
+        resp = scraper.get(full_url, timeout=15)
+        if resp.status_code != 200:
+            return []
+            
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # METHOD 1: Scrape from JSON Script (Most Reliable)
-        script_data = soup.find('script', id='__NEXT_DATA__')
         results = []
         seen_names = set()
 
+        # --- TRY JSON EXTRACTION ---
+        script_data = soup.find('script', id='__NEXT_DATA__')
         if script_data:
             try:
                 js = json.loads(script_data.string)
-                # Navigate the nested JSON structure
-                performers = js['props']['pageProps']['data']['performers']['edges']
-                for p in performers:
-                    node = p['node']
-                    name = node['name']
-                    # Hunt for the highest quality image URL in the JSON
+                # Flexible path finding in JSON
+                data_root = js.get('props', {}).get('pageProps', {}).get('data', {})
+                edges = data_root.get('performers', {}).get('edges', [])
+                for e in edges:
+                    node = e.get('node', {})
+                    name = node.get('name')
                     img = node.get('mainImage', {}).get('urls', {}).get('large') or \
-                          node.get('mainImage', {}).get('urls', {}).get('small') or ""
-                    
-                    results.append({
-                        "name": name,
-                        "img": img,
-                        "url": f"https://www.freeones.com/{node['slug']}/feed"
-                    })
-                    seen_names.add(name)
+                          node.get('mainImage', {}).get('urls', {}).get('small', "")
+                    if name and name not in seen_names:
+                        results.append({"name": name, "img": img, "url": f"https://www.freeones.com/{node['slug']}/feed"})
+                        seen_names.add(name)
             except: pass
 
-        # METHOD 2: Fallback to Grid Scraping if JSON fails
+        # --- FALLBACK: HTML SCRAPING ---
         if not results:
-            items = soup.select('div[data-test="performer-item"], [class*="PerformerCard"]')
-            for item in items:
-                link_tag = item.find('a', href=re.compile(r'/[^/]+/feed'))
-                if not link_tag: continue
-                
-                name = link_tag.get('href').split('/')[1].replace('-', ' ').title()
+            cards = soup.select('div[data-test="performer-item"], .grid-item, [class*="PerformerCard"]')
+            for card in cards:
+                link = card.find('a', href=re.compile(r'/[^/]+/feed'))
+                if not link: continue
+                name = link.get('href').split('/')[1].replace('-', ' ').title()
                 if name not in seen_names:
-                    img_tag = item.find('img')
-                    img_url = ""
+                    img_tag = card.find('img')
+                    img = ""
                     if img_tag:
-                        img_url = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('data-original') or ""
-                    
-                    results.append({
-                        "name": name,
-                        "img": img_url,
-                        "url": f"https://www.freeones.com{link_tag.get('href')}"
-                    })
+                        img = img_tag.get('data-src') or img_tag.get('src') or img_tag.get('data-original') or ""
+                    results.append({"name": name, "img": img, "url": f"https://www.freeones.com{link.get('href')}"})
+                    seen_names.add(name)
+        
         return results
-    except Exception as e:
-        st.error(f"Scrape Failed: {e}")
+    except:
         return []
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
     st.title("🔭 TITAN COMMAND")
-    
     p_type = st.selectbox("Type", ["Babe", "Male"])
-    page_num = st.number_input("Page", min_value=1, value=1, step=1)
+    page_num = st.number_input("Page", min_value=1, value=1)
     
-    st.subheader("📏 Anatomy Specs")
+    st.subheader("📏 Anatomy")
     h_range = st.slider("Height (cm)", 100, 250, (140, 190))
     w_range = st.slider("Weight (kg)", 30, 200, (50, 100))
     a_range = st.slider("Age", 18, 75, (18, 30))
     
     p_l, p_t = (0,0), (0,0)
     if p_type == "Male":
-        p_l = st.slider("Length (cm)", 5, 40, (18, 28))
-        p_t = st.slider("Thickness (cm)", 2, 15, (4, 8))
+        p_l = st.slider("Penis Length", 5, 40, (18, 28))
+        p_t = st.slider("Penis Thickness", 2, 15, (4, 8))
 
-    st.subheader("⏱️ Video Search")
     min_m = st.slider("Min Minutes", 0, 120, 10)
-
-    tags_list = ["Chubby", "Striptease", "Softcore", "Hardcore", "Celebrity", "Big Boobs", "Masturbation", "Teen", "Threesome", "Blowjobs", "Lesbian", "Anal", "Amateur", "Lingerie", "Interracial", "Small Tits", "POV", "Fetish", "Feet", "Cumshot", "Stockings", "Big Butt", "Hairy", "Facial", "Roleplay", "Bikini", "Latina", "Asian", "Uniforms", "Housewife", "Casting", "Bondage", "Handjob", "Massage", "Big Cock", "Ebony", "BBW", "Upskirt", "Alt", "Close Up", "MILF", "Strap On"]
+    
+    tags_list = ["Chubby", "Striptease", "Softcore", "Hardcore", "Big Boobs", "Masturbation", "Teen", "Threesome", "Blowjobs", "Lesbian", "Anal", "Amateur", "Lingerie", "Interracial", "Small Tits", "POV", "Fetish", "Feet", "Cumshot", "Stockings", "Big Butt", "Hairy", "Facial", "Roleplay", "Bikini", "Latina", "Asian", "MILF"]
     selected_tags = st.multiselect("Niches", tags_list)
 
     if st.button("🚀 EXECUTE SCAN", use_container_width=True):
@@ -139,11 +128,7 @@ if st.session_state.current_results:
     for i, item in enumerate(st.session_state.current_results):
         with cols[i % 4]:
             st.markdown('<div class="performer-card">', unsafe_allow_html=True)
-            
-            # The Image with a proper error handler
-            img_html = f'<div class="img-container"><img src="{item["img"]}" onerror="this.src=\'https://via.placeholder.com/300x400?text=Reloading+Image\';"></div>'
-            st.markdown(img_html, unsafe_allow_html=True)
-            
+            st.markdown(f'<div class="img-box"><img src="{item["img"]}" onerror="this.src=\'https://via.placeholder.com/300x400?text=No+Thumb\';"></div>', unsafe_allow_html=True)
             st.write(f"**{item['name']}**")
             
             q = item['name'].replace(' ', '+')
@@ -153,12 +138,11 @@ if st.session_state.current_results:
                 <div style="margin: 8px 0;">
                     <a class="tube-btn" href="https://www.xvideos.com/?k={q}&durf={xv_dur}" target="_blank">XV</a>
                     <a class="tube-btn" href="https://www.eporner.com/search/{q}/?min_len={min_m}" target="_blank">EP</a>
-                    <a class="tube-btn" href="https://sexyprawn.com/search/all/{q}/?duration={min_m}-120" target="_blank">SP</a>
+                    <a class="tube-btn" href="https://sxyprn.com/search/all/{q}/?duration={min_m}-120" target="_blank">SP</a>
                     <a class="tube-btn" href="https://xmoviesforyou.com/?s={q}" target="_blank">XMFY</a>
                 </div>
             """, unsafe_allow_html=True)
-            
-            st.markdown(f"[FreeOnes Profile]({item['url']})")
+            st.markdown(f"[Profile]({item['url']})")
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("System Ready. Execute Scan to fetch data.")
+    st.info("System Ready. Execute Scan.")
