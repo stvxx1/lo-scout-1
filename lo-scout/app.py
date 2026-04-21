@@ -22,29 +22,30 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE RE-ENGINEERED SCRAPER ---
+# --- 2. THE FINAL ENGINE ---
 @st.cache_data(ttl=300)
-def fetch_titan_data(p_type, h_range, w_range, age_range, selected_cats, p_len=None, p_thick=None):
+def fetch_titan_data(p_type, h_range, w_range, age_range, selected_cats, page, p_len=None, p_thick=None):
     scraper = cloudscraper.create_scraper()
     base_url = "https://www.freeones.com/performers"
     
-    # Matching your exact URL structure requirements
+    # URL Construction based on your precise link structure
     params = [
+        f"page={page}",
         f"f[performerType]={'babe' if p_type == 'Babe' else 'male'}",
         f"r[appearance.metric.height]={h_range[0]},{h_range[1]}",
         f"r[appearance.metric.weight]={w_range[0]},{w_range[1]}",
         f"r[age]={age_range[0]},{age_range[1]}",
         "filter_mode[performerType]=and",
-        "filter_mode[global]=and"
+        "filter_mode[global]=and",
+        "s=rank.currentRank",
+        "o=desc"
     ]
     
-    # Handle Categories in the 'f[categories]' format you provided
     if selected_cats:
         for cat in selected_cats:
             params.append(f"f[categories]={cat.replace(' ', '+')}")
         params.append("filter_mode[categories]=and")
     
-    # Anatomy for Males
     if p_type == "Male" and p_len and p_thick:
         params.append(f"r[appearance.metric.penis_length]={p_len[0]},{p_len[1]}")
         params.append(f"r[appearance.metric.penis_thickness]={p_thick[0]},{p_thick[1]}")
@@ -70,10 +71,11 @@ def fetch_titan_data(p_type, h_range, w_range, age_range, selected_cats, p_len=N
     except:
         return []
 
-# --- 3. SIDEBAR CONTROLS ---
+# --- 3. SIDEBAR: COMMAND CENTER ---
 with st.sidebar:
     st.title("🔭 TITAN COMMAND")
     
+    # Watchlist Management
     with st.expander("⭐ WATCHLIST", expanded=False):
         for n, l in list(st.session_state.watchlist.items()):
             c1, c2 = st.columns([4,1])
@@ -84,8 +86,10 @@ with st.sidebar:
 
     st.divider()
 
-    # Inputs
+    # Filters
     p_type = st.selectbox("Option Box 1", ["Babe", "Male"])
+    page_num = st.number_input("Page Number", min_value=1, max_value=100, value=1)
+    
     h_range = st.slider("Height Range (cm)", 100, 250, (104, 169))
     w_range = st.slider("Weight Range (kg)", 30, 200, (60, 120))
     a_range = st.slider("Age Range", 18, 75, (18, 30))
@@ -94,9 +98,9 @@ with st.sidebar:
     if p_type == "Male":
         st.subheader("Anatomy Specs")
         p_l = st.slider("Penis Length (cm)", 5, 40, (15, 25))
-        p_t = st.slider("Penis Thickness (cm)", 2, 12, (4, 6))
+        p_t = st.slider("Penis Thickness (cm)", 2, 15, (4, 7))
 
-    # Categories list
+    # Option Box 2 (Categories)
     tags_list = [
         "Chubby", "Striptease", "Softcore", "Hardcore", "Official Site", "Celebrity", "Big Boobs",
         "Masturbation", "Teen", "Threesome", "Toys", "Blowjobs", "Lesbian", "Anal",
@@ -109,9 +113,10 @@ with st.sidebar:
     selected_tags = st.multiselect("Option Box 2", tags_list)
 
     if st.button("🚀 EXECUTE SCAN"):
-        res = fetch_titan_data(p_type, h_range, w_range, a_range, selected_tags, p_l, p_t)
+        res = fetch_titan_data(p_type, h_range, w_range, a_range, selected_tags, page_num, p_l, p_t)
         st.session_state.current_results = res
-        st.session_state.history.insert(0, f"{p_type} | {'+'.join(selected_tags[:1])}")
+        # Log History
+        st.session_state.history.insert(0, f"Pg {page_num} | {p_type} | {len(selected_tags)} tags")
 
     st.divider()
     st.subheader("📜 History")
@@ -119,7 +124,7 @@ with st.sidebar:
         st.markdown(f"<div class='history-text'>{h}</div>", unsafe_allow_html=True)
 
 # --- 4. MAIN DISPLAY ---
-st.title("Discovery Feed")
+st.title("Titan Scout Feed")
 
 if st.session_state.current_results:
     cols = st.columns(4)
@@ -129,13 +134,16 @@ if st.session_state.current_results:
             if item['img']: st.image(item['img'], use_container_width=True)
             st.write(f"**{item['name']}**")
             
+            # Watchlist Button
             if st.button("⭐ Watch", key=f"w_{item['name']}"):
                 st.session_state.watchlist[item['name']] = item['url']
                 st.toast(f"Saved {item['name']}")
 
             st.markdown(f"[Stats]({item['url']})")
+            
+            # Quick Tube Search
             q = item['name'].replace(' ', '+')
             st.markdown(f"[XV](https://www.xvideos.com/?k={q}) | [EP](https://www.eporner.com/search/{q}/)")
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("System Standby. Adjust ranges and Execute.")
+    st.info("System Ready. Configure filters and execute.")
