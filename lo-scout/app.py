@@ -16,67 +16,74 @@ st.markdown("""
     section[data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #00f2ff; }
     .performer-card {
         background: #1f2937; border: 1px solid #374151; border-radius: 12px;
-        padding: 10px; text-align: center; margin-bottom: 15px;
+        padding: 12px; text-align: center; margin-bottom: 15px;
     }
-    .history-text { font-size: 0.75rem; color: #888; }
+    .btn-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-top: 10px; }
+    .tube-btn {
+        background: #374151; color: #00f2ff !important; padding: 4px 8px; 
+        border-radius: 4px; text-decoration: none; font-size: 0.75rem; font-weight: bold;
+    }
+    .tube-btn:hover { background: #4b5563; border: 1px solid #00f2ff; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE FINAL ENGINE ---
+# --- 2. THE VIDEO ENGINE ---
 @st.cache_data(ttl=300)
-def fetch_titan_data(p_type, h_range, w_range, age_range, selected_cats, page, p_len=None, p_thick=None):
+def fetch_titan_videos(selected_cats, page, dur_range):
     scraper = cloudscraper.create_scraper()
-    base_url = "https://www.freeones.com/performers"
+    # Now targeting the VIDEOS section
+    base_url = "https://www.freeones.com/videos"
     
-    # URL Construction based on your precise link structure
+    # Duration is in seconds for the URL
+    min_sec = dur_range[0] * 60
+    max_sec = dur_range[1] * 60
+    
     params = [
         f"page={page}",
-        f"f[performerType]={'babe' if p_type == 'Babe' else 'male'}",
-        f"r[appearance.metric.height]={h_range[0]},{h_range[1]}",
-        f"r[appearance.metric.weight]={w_range[0]},{w_range[1]}",
-        f"r[age]={age_range[0]},{age_range[1]}",
-        "filter_mode[performerType]=and",
+        f"r[duration]={min_sec},{max_sec}",
         "filter_mode[global]=and",
-        "s=rank.currentRank",
-        "o=desc"
+        "s=relevance"
     ]
     
     if selected_cats:
         for cat in selected_cats:
             params.append(f"f[categories]={cat.replace(' ', '+')}")
         params.append("filter_mode[categories]=and")
-    
-    if p_type == "Male" and p_len and p_thick:
-        params.append(f"r[appearance.metric.penis_length]={p_len[0]},{p_len[1]}")
-        params.append(f"r[appearance.metric.penis_thickness]={p_thick[0]},{p_thick[1]}")
 
     full_url = f"{base_url}?{'&'.join(params)}"
     
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0'}
         resp = scraper.get(full_url, headers=headers, timeout=15)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        links = soup.find_all('a', href=re.compile(r'/[^/]+/feed'))
+        # Selectors for Video Grid items
+        items = soup.select('div[data-test="video-item"]')
         results = []
-        seen = set()
-        for link in links:
-            href = link.get('href')
-            name = href.split('/')[1].replace('-', ' ').title()
-            if name not in seen:
-                img = link.find('img').get('src') if link.find('img') else ""
-                results.append({"name": name, "img": img, "url": f"https://www.freeones.com{href}"})
-                seen.add(name)
+        for item in items:
+            link_tag = item.select_one('a[href^="/video/"]')
+            img_tag = item.select_one('img')
+            title_tag = item.select_one('p, span') # Varies by site layout
+            
+            if link_tag:
+                href = link_tag['href']
+                title = link_tag.get('title') or (title_tag.text if title_tag else "Video Result")
+                img = img_tag['src'] if img_tag else ""
+                results.append({
+                    "name": title.strip(), 
+                    "img": img, 
+                    "url": f"https://www.freeones.com{href}"
+                })
         return results
-    except:
+    except Exception as e:
+        st.error(f"Scrape Error: {e}")
         return []
 
-# --- 3. SIDEBAR: COMMAND CENTER ---
+# --- 3. SIDEBAR ---
 with st.sidebar:
-    st.title("🔭 TITAN COMMAND")
+    st.title("🔭 TITAN VIDEO CMD")
     
-    # Watchlist Management
-    with st.expander("⭐ WATCHLIST", expanded=False):
+    with st.expander("⭐ WATCHLIST"):
         for n, l in list(st.session_state.watchlist.items()):
             c1, c2 = st.columns([4,1])
             c1.markdown(f"[{n}]({l})")
@@ -85,46 +92,23 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-
-    # Filters
-    p_type = st.selectbox("Option Box 1", ["Babe", "Male"])
-    page_num = st.number_input("Page Number", min_value=1, max_value=100, value=1)
+    page_num = st.number_input("Page", min_value=1, value=1)
     
-    h_range = st.slider("Height Range (cm)", 100, 250, (104, 169))
-    w_range = st.slider("Weight Range (kg)", 30, 200, (60, 120))
-    a_range = st.slider("Age Range", 18, 75, (18, 30))
+    # VIDEO LENGTH FILTERS (Minutes)
+    st.subheader("⏱️ Video Specs")
+    dur_range = st.slider("Duration (Minutes)", 0, 120, (10, 30))
     
-    p_l, p_t = None, None
-    if p_type == "Male":
-        st.subheader("Anatomy Specs")
-        p_l = st.slider("Penis Length (cm)", 5, 40, (15, 25))
-        p_t = st.slider("Penis Thickness (cm)", 2, 15, (4, 7))
-
-    # Option Box 2 (Categories)
-    tags_list = [
-        "Chubby", "Striptease", "Softcore", "Hardcore", "Official Site", "Celebrity", "Big Boobs",
-        "Masturbation", "Teen", "Threesome", "Toys", "Blowjobs", "Lesbian", "Anal",
-        "Amateur", "Lingerie", "Interracial", "Small Tits", "Mature", "POV", "Fetish",
-        "Feet", "Cumshot", "Stockings", "Big Butt", "Hairy", "Facial", "Roleplay",
-        "Bikini", "Latina", "Asian", "Uniforms", "Housewife", "Casting", "Bondage",
-        "Handjob", "Massage", "Big Cock", "Ebony", "BBW", "Upskirt", "Alt", "Close Up",
-        "MILF", "Strap On", "Extreme", "Holiday", "Orgy", "Pantyhose", "Cuckold", "Interactive Porn"
-    ]
-    selected_tags = st.multiselect("Option Box 2", tags_list)
+    # Categories
+    tags_list = ["Chubby", "Striptease", "Softcore", "Hardcore", "Official Site", "Celebrity", "Big Boobs", "Masturbation", "Teen", "Threesome", "Toys", "Blowjobs", "Lesbian", "Anal", "Amateur", "Lingerie", "Interracial", "Small Tits", "Mature", "POV", "Fetish", "Feet", "Cumshot", "Stockings", "Big Butt", "Hairy", "Facial", "Roleplay", "Bikini", "Latina", "Asian", "Uniforms", "Housewife", "Casting", "Bondage", "Handjob", "Massage", "Big Cock", "Ebony", "BBW", "Upskirt", "Alt", "Close Up", "MILF", "Strap On", "Extreme", "Holiday", "Orgy", "Pantyhose", "Cuckold", "Interactive Porn"]
+    selected_tags = st.multiselect("Niches", tags_list)
 
     if st.button("🚀 EXECUTE SCAN"):
-        res = fetch_titan_data(p_type, h_range, w_range, a_range, selected_tags, page_num, p_l, p_t)
+        res = fetch_titan_videos(selected_tags, page_num, dur_range)
         st.session_state.current_results = res
-        # Log History
-        st.session_state.history.insert(0, f"Pg {page_num} | {p_type} | {len(selected_tags)} tags")
+        st.session_state.history.insert(0, f"Pg {page_num} | {dur_range[0]}-{dur_range[1]}m")
 
-    st.divider()
-    st.subheader("📜 History")
-    for h in st.session_state.history[:3]:
-        st.markdown(f"<div class='history-text'>{h}</div>", unsafe_allow_html=True)
-
-# --- 4. MAIN DISPLAY ---
-st.title("Titan Scout Feed")
+# --- 4. MAIN FEED ---
+st.title("Titan Video Feed")
 
 if st.session_state.current_results:
     cols = st.columns(4)
@@ -132,18 +116,27 @@ if st.session_state.current_results:
         with cols[i % 4]:
             st.markdown('<div class="performer-card">', unsafe_allow_html=True)
             if item['img']: st.image(item['img'], use_container_width=True)
-            st.write(f"**{item['name']}**")
+            st.markdown(f"**{item['name'][:50]}...**")
             
-            # Watchlist Button
-            if st.button("⭐ Watch", key=f"w_{item['name']}"):
+            if st.button("⭐ Watch", key=f"w_{i}"):
                 st.session_state.watchlist[item['name']] = item['url']
-                st.toast(f"Saved {item['name']}")
+                st.toast("Saved to Watchlist")
 
-            st.markdown(f"[Stats]({item['url']})")
-            
-            # Quick Tube Search
+            # THE TUBE HUB + DURATION FILTERS
             q = item['name'].replace(' ', '+')
-            st.markdown(f"[XV](https://www.xvideos.com/?k={q}) | [EP](https://www.eporner.com/search/{q}/)")
+            min_m = dur_range[0]
+            
+            # Map duration to tube buckets
+            xv_dur = "10min_more" if min_m >= 10 else "allduration"
+            
+            st.markdown(f"""
+                <div class="btn-row">
+                    <a class="tube-btn" href="https://www.xvideos.com/?k={q}&durf={xv_dur}" target="_blank">XV</a>
+                    <a class="tube-btn" href="https://www.eporner.com/search/{q}/?min_len={min_m}" target="_blank">EP</a>
+                    <a class="tube-btn" href="https://sxyprn.com/search/all/{q}/?duration={min_m}-120" target="_blank">SP</a>
+                    <a class="tube-btn" href="https://xmoviesforyou.com/?s={q}" target="_blank">XMFY</a>
+                </div>
+            """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("System Ready. Configure filters and execute.")
+    st.info("System Ready. Configure duration and execute.")
