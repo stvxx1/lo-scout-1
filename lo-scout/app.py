@@ -4,9 +4,11 @@ from bs4 import BeautifulSoup
 import re
 import json
 import time
+import random
+import urllib.parse
 
-# --- 1. INTERFACE & S24 ULTRA STYLING ---
-st.set_page_config(page_title="LO-SCOUT TITAN V17", layout="wide")
+# --- 1. CONFIG & STYLING ---
+st.set_page_config(page_title="LO-SCOUT TITAN V18", layout="wide")
 
 if 'current_results' not in st.session_state: st.session_state.current_results = []
 if 'current_page' not in st.session_state: st.session_state.current_page = 1
@@ -32,12 +34,45 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE HANDSHAKE ENGINE ---
+# --- 2. STEALTH UTILITIES ---
+USER_AGENTS = [
+    "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
+]
+
+def fetch_with_retries(scraper, url, headers, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            # FEATURE: Random 2-5 second delay
+            time.sleep(random.uniform(2, 5))
+            
+            # FEATURE: Rotate User-Agent per attempt
+            headers["User-Agent"] = random.choice(USER_AGENTS)
+            
+            response = scraper.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                return response
+            elif response.status_code == 429: # FEATURE: Rate Limited
+                st.warning(f"Rate limited (429). Backing off for {10 * (2 ** attempt)}s...")
+                time.sleep(10 * (2 ** attempt))
+            elif response.status_code == 403:
+                st.error("Access forbidden (403). IP/User-Agent may be blocked.")
+                return response
+            elif response.status_code == 503:
+                st.error("Service unavailable (503). Server is blocking.")
+                return response
+        except Exception as e:
+            time.sleep(5)
+    return None
+
+# --- 3. THE ENGINE ---
 def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
-    # Initialize scraper with trace-accurate mobile fingerprint
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'android', 'desktop': False})
     
-    # Precise URL building from S24 Ultra Trace
+    # Trace-Perfect URL logic
     p_val = 'babe' if p_type == 'Babe' else 'male'
     cat_str = "".join([f"&f[categories][]={n.replace(' ', '%20')}" for n in niches])
     
@@ -48,69 +83,66 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
         f"&r[age]={a_range[0]},{a_range[1]}"
         f"&filter_mode[categories]=and&filter_mode[global]=and&s=rank.currentRank&o=desc"
     )
-
     if p_type == "Male":
-        url += f"&r[appearance.metric.penis_length]={p_l[0]},{p_l[1]}"
-        url += f"&r[appearance.metric.penis_thickness]={p_t[0]},{p_t[1]}"
+        url += f"&r[appearance.metric.penis_length]={p_l[0]},{p_l[1]}&r[appearance.metric.penis_thickness]={p_t[0]},{p_t[1]}"
 
+    # FEATURE: Advanced Headers
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Referer": "https://www.freeones.com/",
-        "Sec-CH-UA-Platform": '"Android"',
-        "X-Requested-With": "com.android.chrome"
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Cache-Control": "max-age=0",
+        "Referer": "https://www.freeones.com/"
     }
 
-    try:
-        # Give the server a moment to respond (simulates human latency)
-        response = scraper.get(url, headers=headers, timeout=20)
-        if response.status_code != 200: return []
+    response = fetch_with_retries(scraper, url, headers)
+    
+    if not response or response.status_code != 200:
+        return []
 
+    try:
         soup = BeautifulSoup(response.text, 'html.parser')
         batch = []
-
-        # Target the Next.js data script (The Gold Mine)
         script_tag = soup.find('script', id='__NEXT_DATA__')
+        
         if script_tag:
             data = json.loads(script_tag.string)
-            
-            # Navigate the nested JSON structure
-            try:
-                # Find the 'edges' list wherever it exists in the tree
-                def extract_nodes(obj):
-                    if isinstance(obj, dict):
-                        if 'edges' in obj and len(obj['edges']) > 0 and 'node' in obj['edges'][0]:
-                            return obj['edges']
-                        for k, v in obj.items():
-                            res = extract_nodes(v)
-                            if res: return res
-                    elif isinstance(obj, list):
-                        for item in obj:
-                            res = extract_nodes(item)
-                            if res: return res
-                    return None
+            def extract_nodes(obj):
+                if isinstance(obj, dict):
+                    if 'edges' in obj and len(obj['edges']) > 0 and 'node' in obj['edges'][0]:
+                        return obj['edges']
+                    for k, v in obj.items():
+                        res = extract_nodes(v)
+                        if res: return res
+                elif isinstance(obj, list):
+                    for item in obj:
+                        res = extract_nodes(item)
+                        if res: return res
+                return None
 
-                edges = extract_nodes(data)
-                if edges:
-                    for edge in edges:
-                        node = edge.get('node', {})
-                        name = node.get('name')
-                        slug = node.get('slug')
-                        # Lock image directly to name object
-                        img = node.get('mainImage', {}).get('urls', {}).get('large', '')
-                        
-                        if name and slug:
-                            batch.append({"name": name, "img": img, "slug": slug})
-            except:
-                pass
-        
+            edges = extract_nodes(data)
+            if edges:
+                for edge in edges:
+                    node = edge.get('node', {})
+                    if node.get('name') and node.get('slug'):
+                        batch.append({
+                            "name": node.get('name'),
+                            "slug": node.get('slug'),
+                            "img": node.get('mainImage', {}).get('urls', {}).get('large', '')
+                        })
         return batch
     except:
         return []
 
-# --- 3. SIDEBAR ---
+# --- 4. SIDEBAR ---
 with st.sidebar:
-    st.title("🔭 TITAN V17")
+    st.title("🔭 TITAN V18")
     p_type = st.selectbox("Type", ["Babe", "Male"])
     if st.button("🔄 FULL RESET"):
         st.session_state.current_results = []
@@ -129,7 +161,7 @@ with st.sidebar:
     min_m = st.slider("Min Minutes", 0, 120, 10)
     selected_niches = st.multiselect("Niches", ["Small Tits", "Chubby", "Big Boobs", "Teen", "Anal", "MILF", "Latina", "Asian", "Ebony"], default=["Small Tits"])
 
-# --- 4. DISPLAY ---
+# --- 5. GRID ---
 if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
@@ -150,13 +182,10 @@ if st.session_state.current_results:
             ''', unsafe_allow_html=True)
 
 st.divider()
-if st.button("🚀 EXECUTE SCAN", use_container_width=True):
-    with st.spinner(f"Initiating Handshake Page {st.session_state.current_page}..."):
+if st.button("🚀 EXECUTE STEALTH SCAN", use_container_width=True):
+    with st.spinner(f"Stealth Request: Page {st.session_state.current_page}..."):
         new_batch = fetch_data(p_type, h_range, w_range, a_range, selected_niches, st.session_state.current_page, p_l, p_t)
         if new_batch:
             st.session_state.current_results.extend(new_batch)
             st.session_state.current_page += 1
             st.rerun()
-        else:
-            st.error("Fetch failed. If you see this, the site is blocking the script's connection. Try resetting and reducing the height range.")
-
