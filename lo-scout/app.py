@@ -4,8 +4,8 @@ from bs4 import BeautifulSoup
 import re
 import json
 
-# --- 1. SETTINGS & S24 ULTRA STYLING ---
-st.set_page_config(page_title="LO-SCOUT TITAN V15", layout="wide")
+# --- 1. SETTINGS & STYLES ---
+st.set_page_config(page_title="LO-SCOUT TITAN V16", layout="wide")
 
 if 'current_results' not in st.session_state: st.session_state.current_results = []
 if 'current_page' not in st.session_state: st.session_state.current_page = 1
@@ -35,11 +35,11 @@ st.markdown("""
 def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'android', 'desktop': False})
     
-    # MANUAL URL CONSTRUCTION (Matches S24 Ultra Trace exactly)
+    # URL Reconstruction matching S24 Ultra Trace exactly
     base_url = "https://www.freeones.com/performers"
     p_type_val = 'babe' if p_type == 'Babe' else 'male'
     
-    # Logic for categories must use the double-bracket format found in the trace
+    # Reconstructed categorical format from trace
     cat_query = "".join([f"&f[categories][]={n.replace(' ', '%20')}" for n in niches])
     
     query_url = (
@@ -57,6 +57,9 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
     headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
         "Referer": "https://www.freeones.com/",
+        "Sec-CH-UA": '"Chromium";v="125", "Not.A/Brand";v="24"',
+        "Sec-CH-UA-Mobile": "?1",
+        "Sec-CH-UA-Platform": '"Android"',
         "X-Requested-With": "com.android.chrome"
     }
 
@@ -67,15 +70,15 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
         soup = BeautifulSoup(resp.text, 'html.parser')
         batch = []
 
-        # Find the JSON data block (prevents thumbnail mix-ups)
+        # JSON Extraction (Prevents thumbnail mix-ups)
         script = soup.find('script', id='__NEXT_DATA__')
         if script:
             js = json.loads(script.string)
             
-            # Recursive search for the performer list
             def find_p(d):
                 if isinstance(d, dict):
-                    if 'edges' in d and len(d['edges']) > 0: return d['edges']
+                    if 'edges' in d and len(d['edges']) > 0 and 'node' in d['edges'][0]: 
+                        return d['edges']
                     for v in d.values():
                         res = find_p(v)
                         if res: return res
@@ -90,11 +93,24 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
                 for edge in nodes:
                     n = edge.get('node', {})
                     name = n.get('name')
-                    # LARGE URL for high quality
                     img = n.get('mainImage', {}).get('urls', {}).get('large', '')
                     slug = n.get('slug')
                     if name and slug:
                         batch.append({"name": name, "img": img, "slug": slug})
+        
+        # HTML Fallback
+        if not batch:
+            containers = soup.select('[data-test="performer-item"]')
+            for box in containers:
+                link = box.find('a', href=re.compile(r'/[^/]+/feed'))
+                img_tag = box.find('img')
+                if link and img_tag:
+                    slug = link.get('href').split('/')[1]
+                    batch.append({
+                        "name": slug.replace('-', ' ').title(),
+                        "img": img_tag.get('data-src') or img_tag.get('src') or "",
+                        "slug": slug
+                    })
         
         return batch
     except:
@@ -102,7 +118,7 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_l, p_t):
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
-    st.title("🔭 TITAN V15")
+    st.title("🔭 TITAN V16")
     p_type = st.selectbox("Type", ["Babe", "Male"])
     if st.button("🔄 FULL RESET"):
         st.session_state.current_results = []
@@ -121,7 +137,7 @@ with st.sidebar:
     min_m = st.slider("Min Minutes", 0, 120, 10)
     selected_niches = st.multiselect("Niches", ["Small Tits", "Chubby", "Big Boobs", "Teen", "Anal", "MILF", "Latina", "Asian", "Ebony"], default=["Small Tits"])
 
-# --- 4. THE GRID ---
+# --- 4. GRID ---
 if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
@@ -142,13 +158,13 @@ if st.session_state.current_results:
             ''', unsafe_allow_html=True)
 
 st.divider()
-if st.button("🚀 EXECUTE SCAN / LOAD MORE", use_container_width=True):
-    with st.spinner(f"Pulling Trace-Aligned Page {st.session_state.current_page}..."):
+if st.button("🚀 EXECUTE SCAN", use_container_width=True):
+    with st.spinner(f"Pulling Page {st.session_state.current_page}..."):
         new_batch = fetch_data(p_type, h_range, w_range, a_range, selected_niches, st.session_state.current_page, p_l, p_t)
         if new_batch:
             st.session_state.current_results.extend(new_batch)
             st.session_state.current_page += 1
             st.rerun()
         else:
-            st.error("Still no results. Check if the site is accessible from your region without a VPN.")
+            st.error("Still no results. Site is likely blocking the Cloud IP.")
 
