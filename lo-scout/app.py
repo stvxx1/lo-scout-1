@@ -5,8 +5,8 @@ import re
 import json
 import urllib.parse
 
-# --- 1. CONFIG ---
-st.set_page_config(page_title="LO-SCOUT TITAN V11", layout="wide")
+# --- 1. CONFIG & UI ---
+st.set_page_config(page_title="LO-SCOUT TITAN V12", layout="wide")
 
 if 'current_results' not in st.session_state: st.session_state.current_results = []
 if 'current_page' not in st.session_state: st.session_state.current_page = 1
@@ -18,9 +18,9 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #0b0e14; border-right: 1px solid #00f2ff; }
     .performer-card {
         background: #111827; border: 1px solid #1f2937; border-radius: 12px;
-        padding: 12px; text-align: center; margin-bottom: 20px; min-height: 530px;
+        padding: 12px; text-align: center; margin-bottom: 20px; min-height: 540px;
     }
-    .img-box { width: 100%; height: 310px; overflow: hidden; border-radius: 8px; background: #000; border: 1px solid #333; }
+    .img-box { width: 100%; height: 300px; overflow: hidden; border-radius: 8px; background: #000; border: 1px solid #333; }
     .img-box img { width: 100%; height: 100%; object-fit: cover; }
     .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 12px; }
     .tube-btn {
@@ -32,12 +32,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. ENGINE (TRACE-ALIGNED) ---
+# --- 2. THE JSON ENGINE ---
 def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_len, p_thick):
-    # Create scraper with the Android platform flag
     scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'android', 'desktop': False})
     
-    # URL params matching your manual working link
+    # URL construction strictly following your trace
     params = [
         "q=", f"page={page}",
         f"f[performerType]={'babe' if p_type == 'Babe' else 'male'}"
@@ -59,15 +58,11 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_len, p_thick):
 
     url = f"https://www.freeones.com/performers?{'&'.join(params)}"
     
-    # CRITICAL: Sec-CH-UA Headers from your SM-S928B Trace
     headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Referer": "https://www.freeones.com/",
-        "Sec-CH-UA": '"Chromium";v="125", "Not.A/Brand";v="24", "Samsung Internet";v="25"',
-        "Sec-CH-UA-Mobile": "?1",
-        "Sec-CH-UA-Platform": '"Android"',
-        "X-Requested-With": "com.android.chrome"
+        "X-Requested-With": "com.android.chrome",
+        "Sec-CH-UA-Platform": '"Android"'
     }
 
     try:
@@ -76,34 +71,47 @@ def fetch_data(p_type, h_range, w_range, a_range, niches, page, p_len, p_thick):
         
         soup = BeautifulSoup(resp.text, 'html.parser')
         batch = []
-        
-        # Scrape using the card container to keep image/name synced
-        items = soup.select('[data-test="performer-item"]')
-        
-        for item in items:
-            link = item.find('a', href=re.compile(r'/[^/]+/feed'))
-            if link:
-                slug = link.get('href').split('/')[1]
-                name = slug.replace('-', ' ').title()
-                
-                # Image search restricted ONLY to this item's container
-                img_tag = item.find('img')
-                img_url = ""
-                if img_tag:
-                    img_url = img_tag.get('data-src') or img_tag.get('src') or ""
-                
-                if name and not any(x['name'] == name for x in batch):
-                    batch.append({"name": name, "img": img_url, "slug": slug})
+
+        # Find the Next.js JSON blob
+        json_script = soup.find('script', id='__NEXT_DATA__')
+        if json_script:
+            data = json.loads(json_script.string)
+            
+            # Deep search for the performer list (edges)
+            def find_performers(d):
+                if isinstance(d, dict):
+                    if 'edges' in d and len(d['edges']) > 0 and 'node' in d['edges'][0]:
+                        return d['edges']
+                    for v in d.values():
+                        res = find_performers(v)
+                        if res: return res
+                elif isinstance(d, list):
+                    for i in d:
+                        res = find_performers(i)
+                        if res: return res
+                return None
+
+            edges = find_performers(data)
+            if edges:
+                for edge in edges:
+                    node = edge.get('node', {})
+                    name = node.get('name')
+                    slug = node.get('slug')
+                    # Get the high-res image directly from JSON
+                    img = node.get('mainImage', {}).get('urls', {}).get('large', '')
                     
+                    if name and slug:
+                        batch.append({"name": name, "img": img, "slug": slug})
+                        
         return batch
     except:
         return []
 
 # --- 3. SIDEBAR ---
 with st.sidebar:
-    st.title("🔭 TITAN V11")
+    st.title("🔭 TITAN V12")
     p_type = st.selectbox("Type", ["Babe", "Male"])
-    if st.button("🔄 FULL RESET", use_container_width=True):
+    if st.button("🔄 FULL SYSTEM RESET", use_container_width=True):
         st.session_state.current_results = []
         st.session_state.current_page = 1
         st.rerun()
@@ -114,13 +122,13 @@ with st.sidebar:
     
     p_l, p_t = (0,0), (0,0)
     if p_type == "Male":
-        p_l = st.slider("Penis Length (cm)", 5, 40, (18, 28))
-        p_t = st.slider("Penis Thickness (cm)", 2, 15, (4, 8))
+        p_l = st.slider("Penis Length", 5, 40, (18, 28))
+        p_t = st.slider("Penis Thickness", 2, 15, (4, 8))
 
     min_m = st.slider("Min Minutes", 0, 120, 10)
     selected_niches = st.multiselect("Niches", ["Small Tits", "Chubby", "Big Boobs", "Teen", "Anal", "MILF", "Latina", "Asian", "Ebony"], default=["Small Tits"])
 
-# --- 4. GRID ---
+# --- 4. DISPLAY ---
 if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
@@ -129,4 +137,25 @@ if st.session_state.current_results:
             xv_dur = "10min_more" if min_m >= 10 else "allduration"
             st.markdown(f'''
                 <div class="performer-card">
-                    <div class="img-box"><img src="{item["img"]}" onerror="this.src='https://
+                    <div class="img-box"><img src="{item["img"]}" onerror="this.src='https://via.placeholder.com/300x400?text=No+Thumbnail';"></div>
+                    <div class="name-text">{item["name"]}</div>
+                    <div class="btn-grid">
+                        <a class="tube-btn" href="https://www.xvideos.com/?k={q}&durf={xv_dur}" target="_blank">XV</a>
+                        <a class="tube-btn" href="https://www.eporner.com/search/{q}/?min_len={min_m}" target="_blank">EP</a>
+                        <a class="tube-btn" href="https://sexyprawn.com/search/all/{q}/?duration={min_m}-120" target="_blank">SP</a>
+                        <a class="tube-btn" href="https://xmoviesforyou.com/?s={q}" target="_blank">XMFY</a>
+                    </div>
+                    <a href="https://www.freeones.com/{item['slug']}/feed" target="_blank" style="font-size:10px; color:#555; display:block; margin-top:10px;">FreeOnes Profile</a>
+                </div>
+            ''', unsafe_allow_html=True)
+
+st.divider()
+if st.button("🚀 EXECUTE SCAN", use_container_width=True):
+    with st.spinner(f"Parsing JSON Page {st.session_state.current_page}..."):
+        new_batch = fetch_data(p_type, h_range, w_range, a_range, selected_niches, st.session_state.current_page, p_l, p_t)
+        if new_batch:
+            st.session_state.current_results.extend(new_batch)
+            st.session_state.current_page += 1
+            st.rerun()
+        else:
+            st.error("No results. The site may be blocking the Cloud IP or the niches are too specific.")
