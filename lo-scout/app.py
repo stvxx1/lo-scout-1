@@ -5,8 +5,8 @@ import json
 import time
 import random
 
-# --- 1. CONFIG ---
-st.set_page_config(page_title="LO-SCOUT TITAN V19", layout="wide")
+# --- 1. CONFIG & STYLING ---
+st.set_page_config(page_title="LO-SCOUT TITAN V20", layout="wide")
 
 if 'current_results' not in st.session_state: st.session_state.current_results = []
 if 'current_page' not in st.session_state: st.session_state.current_page = 1
@@ -29,48 +29,54 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE BYPASS ENGINE ---
+# --- 2. THE STEALTH ENGINE ---
 def fetch_data(page, p_type):
-    # Use a fresh scraper instance every time to avoid cookie tracking
     scraper = cloudscraper.create_scraper(
         browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
     )
     
-    # Simplified URL to reduce filter-triggering blocks
     p_val = 'babe' if p_type == 'Babe' else 'male'
     url = f"https://www.freeones.com/performers?f[performerType]={p_val}&page={page}&s=rank.currentRank&o=desc"
 
+    # FEATURE: Aggressive Stealth Headers
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
         "Referer": "https://www.freeones.com/",
-        "X-Requested-With": "com.android.chrome"
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1"
     }
 
     try:
-        time.sleep(random.uniform(1, 3))
-        resp = scraper.get(url, headers=headers, timeout=20)
+        # FEATURE: Increased Delay to mimic human browsing
+        time.sleep(random.uniform(2, 5))
+        
+        resp = scraper.get(url, headers=headers, timeout=25)
         
         if resp.status_code != 200:
-            st.error(f"Server rejected request. Status Code: {resp.status_code}")
+            st.error(f"Access Denied or Blocked. Status Code: {resp.status_code}")
             return []
 
         soup = BeautifulSoup(resp.text, 'html.parser')
         batch = []
         
-        # Look for the data blob
         script = soup.find('script', id='__NEXT_DATA__')
         if script:
             js = json.loads(script.string)
             
-            # This search finds the performer data regardless of depth
             def find_items(d):
                 if isinstance(d, dict):
                     if 'edges' in d: return d['edges']
                     for v in d.values():
                         res = find_items(v)
                         if res: return res
-                elif isinstance(d, list):
+                elif isinstance(obj, list):
                     for i in d:
                         res = find_items(i)
                         if res: return res
@@ -87,21 +93,24 @@ def fetch_data(page, p_type):
                         batch.append({"name": name, "img": img, "slug": slug})
         
         return batch
+
+    # FEATURE: Enhanced Error Logging
     except Exception as e:
         st.error(f"Engine Error: {str(e)}")
+        print(f"DEBUG LOG: {e}") # Viewable in console
         return []
 
 # --- 3. UI ---
 with st.sidebar:
-    st.title("🔭 TITAN V19")
+    st.title("🔭 TITAN V20")
     p_type = st.selectbox("Type", ["Babe", "Male"])
     min_m = st.slider("Min Minutes", 0, 120, 10)
-    if st.button("🔄 CLEAR ALL"):
+    if st.button("🔄 RESET APP"):
         st.session_state.current_results = []
         st.session_state.current_page = 1
         st.rerun()
 
-# --- 4. RESULTS ---
+# --- 4. DISPLAY ---
 if st.session_state.current_results:
     cols = st.columns(4)
     for i, item in enumerate(st.session_state.current_results):
@@ -110,7 +119,7 @@ if st.session_state.current_results:
             xv_dur = "10min_more" if min_m >= 10 else "allduration"
             st.markdown(f'''
                 <div class="performer-card">
-                    <div class="img-box"><img src="{item["img"]}"></div>
+                    <div class="img-box"><img src="{item["img"]}" onerror="this.src='https://via.placeholder.com/300x400?text=No+Preview';"></div>
                     <div style="margin:10px 0; font-weight:bold;">{item["name"]}</div>
                     <div class="btn-grid">
                         <a class="tube-btn" href="https://www.xvideos.com/?k={q}&durf={xv_dur}" target="_blank">XV</a>
@@ -121,13 +130,12 @@ if st.session_state.current_results:
                 </div>
             ''', unsafe_allow_html=True)
 
-if st.button("🚀 RUN SCAN", use_container_width=True):
-    with st.spinner("Bypassing filters..."):
+if st.button("🚀 EXECUTE SCAN", use_container_width=True):
+    with st.spinner(f"Contacting Server (Page {st.session_state.current_page})..."):
         new_batch = fetch_data(st.session_state.current_page, p_type)
         if new_batch:
             st.session_state.current_results.extend(new_batch)
             st.session_state.current_page += 1
             st.rerun()
         else:
-            st.warning("No data found. The site is currently blocking this cloud server.")
-
+            st.warning("No new data received. Check the error log above.")
