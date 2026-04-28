@@ -1,3 +1,6 @@
+import sys, os; sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys, os; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+import sys, os; sys.path.append(os.getcwd())
 """
 LO-SCOUT TITAN V22 - Main Application
 Professional performer discovery tool with advanced filtering.

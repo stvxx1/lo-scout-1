@@ -11,9 +11,9 @@ from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, ScraperError
-from ..models.performer import Performer
-from ..models.filters import FilterConfig
+from scraper.base import BaseScraper, ScraperError
+from models.performer import Performer
+from models.filters import FilterConfig
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ class FreeonesScraper(BaseScraper):
         except Exception as e:
             logger.warning(f"JSON extraction failed: {e}")
         
-        # Strategy 2: Enhanced regex extraction
+        # Strategy 2: Enhanced regex extraction with multiple patterns
         try:
             performers = self._extract_from_regex_enhanced(html)
             if performers:
@@ -125,7 +125,7 @@ class FreeonesScraper(BaseScraper):
         except Exception as e:
             logger.warning(f"Enhanced regex extraction failed: {e}")
         
-        # Strategy 3: BeautifulSoup DOM parsing
+        # Strategy 3: BeautifulSoup DOM parsing with better selectors
         try:
             performers = self._extract_from_dom(html)
             if performers:
@@ -133,6 +133,15 @@ class FreeonesScraper(BaseScraper):
                 return performers
         except Exception as e:
             logger.warning(f"DOM extraction failed: {e}")
+        
+        # Strategy 4: Simple name extraction as last resort
+        try:
+            performers = self._extract_names_only(html)
+            if performers:
+                logger.info(f"Names-only extraction successful: {len(performers)} performers")
+                return performers
+        except Exception as e:
+            logger.warning(f"Names-only extraction failed: {e}")
         
         logger.error("All extraction strategies failed")
         return []
@@ -151,6 +160,7 @@ class FreeonesScraper(BaseScraper):
         script_tag = soup.find('script', id='__NEXT_DATA__')
         
         if not script_tag or not script_tag.string:
+            logger.debug("No __NEXT_DATA__ script tag found")
             return []
         
         try:
@@ -159,16 +169,40 @@ class FreeonesScraper(BaseScraper):
             logger.error(f"Failed to parse __NEXT_DATA__ JSON: {e}")
             return []
         
-        # Recursively search for 'edges' in the JSON structure
-        edges = self._find_edges(data)
+        # Try multiple paths to find performer data
+        edges = None
+        
+        # Path 1: Look for edges in the pageProps
+        try:
+            page_props = data.get('props', {}).get('pageProps', {})
+            if page_props:
+                edges = self._find_edges(page_props)
+        except Exception:
+            pass
+        
+        # Path 2: Search entire JSON structure
         if not edges:
+            edges = self._find_edges(data)
+        
+        # Path 3: Look for common performer data structures
+        if not edges:
+            # Try to find performer list in various locations
+            for key in ['performers', 'results', 'data', 'items']:
+                if key in data.get('props', {}):
+                    potential_data = data['props'][key]
+                    if isinstance(potential_data, dict) and 'edges' in potential_data:
+                        edges = potential_data['edges']
+                        break
+        
+        if not edges:
+            logger.debug("No edges found in JSON data")
             return []
         
         performers = []
         for item in edges:
             try:
-                node = item.get('node', {})
-                if not node:
+                node = item.get('node', {}) if isinstance(item, dict) else item
+                if not node or not isinstance(node, dict):
                     continue
                 
                 name = node.get('name')
@@ -177,22 +211,27 @@ class FreeonesScraper(BaseScraper):
                 
                 slug = node.get('slug', '')
                 
-                # Extract image URL
+                # Extract image URL - try multiple fields
                 image_url = ''
-                main_image = node.get('mainImage', {})
+                main_image = node.get('mainImage', {}) or node.get('image', {}) or node.get('thumbnail', {})
                 if main_image:
-                    # Try different image size fields
-                    image_url = (
-                        main_image.get('urls', {}).get('large') or
-                        main_image.get('urls', {}).get('medium') or
-                        main_image.get('urls', {}).get('small') or
-                        main_image.get('url', '')
-                    )
+                    # Try different image URL fields
+                    if isinstance(main_image, dict):
+                        image_url = (
+                            main_image.get('urls', {}).get('large') or
+                            main_image.get('urls', {}).get('medium') or
+                            main_image.get('urls', {}).get('small') or
+                            main_image.get('url') or
+                            main_image.get('src') or
+                            ''
+                        )
+                    elif isinstance(main_image, str):
+                        image_url = main_image
                 
                 # Extract gender if available
                 gender = 'female'  # Default
                 if 'gender' in node:
-                    gender_value = node.get('gender', '').lower()
+                    gender_value = str(node.get('gender', '')).lower()
                     if 'male' in gender_value:
                         gender = 'male'
                 
@@ -226,17 +265,33 @@ class FreeonesScraper(BaseScraper):
             List of edge items or None
         """
         if isinstance(obj, dict):
-            if 'edges' in obj and isinstance(obj['edges'], list):
-                return obj['edges']
+            # Check for edges
+            if 'edges' in obj and isinstance(obj['edges'], list) and len(obj['edges']) > 0:
+                # Verify it looks like performer data
+                first_edge = obj['edges'][0]
+                if isinstance(first_edge, dict) and 'node' in first_edge:
+                    return obj['edges']
+                elif isinstance(first_edge, dict) and 'name' in first_edge:
+                    return obj['edges']
+            
+            # Check for direct items array
+            if 'items' in obj and isinstance(obj['items'], list) and len(obj['items']) > 0:
+                first_item = obj['items'][0]
+                if isinstance(first_item, dict) and ('name' in first_item or 'node' in first_item):
+                    return [{'node': item} if 'node' not in item else item for item in obj['items']]
+            
+            # Recurse into values
             for value in obj.values():
                 result = self._find_edges(value)
                 if result is not None:
                     return result
+                    
         elif isinstance(obj, list):
             for item in obj:
                 result = self._find_edges(item)
                 if result is not None:
                     return result
+                    
         return None
     
     def _extract_from_regex_enhanced(self, html: str) -> List[Performer]:
@@ -252,32 +307,146 @@ class FreeonesScraper(BaseScraper):
         performers = []
         seen_names = set()
         
-        # Pattern for performer data in JSON-like format
-        patterns = [
-            # Pattern for name, slug, and image together
-            r'"name"\s*:\s*"([^"]+)"\s*,\s*"slug"\s*:\s*"([^"]+)".*?"image"\s*:\s*"([^"]+)"',
-            r'"name"\s*:\s*"([^"]+)"\s*,\s*"slug"\s*:\s*"([^"]+)"',
-            # Alternative pattern
-            r'"slug"\s*:\s*"([^"]+)"\s*,\s*"name"\s*:\s*"([^"]+)"',
+        # Pattern 1: Look for performer data in JSON format within the HTML
+        # Matches: {"name":"...","slug":"...","image":"..."}
+        json_patterns = [
+            r'\{[^}]*"name"\s*:\s*"([^"]+)"[^}]*"slug"\s*:\s*"([^"]+)"[^}]*\}',
+            r'\{[^}]*"slug"\s*:\s*"([^"]+)"[^}]*"name"\s*:\s*"([^"]+)"[^}]*\}',
         ]
         
-        for pattern in patterns:
+        for pattern in json_patterns:
             matches = re.finditer(pattern, html)
             for match in matches:
                 try:
                     groups = match.groups()
+                    matched_text = match.group(0)
                     
-                    if len(groups) >= 2:
-                        # Determine order based on pattern
-                        if 'slug' in pattern and pattern.index('slug') < pattern.index('name'):
-                            slug, name = groups[0], groups[1]
-                            image_url = groups[2] if len(groups) > 2 else ''
-                        else:
-                            name, slug = groups[0], groups[1]
-                            image_url = groups[2] if len(groups) > 2 else ''
+                    # Determine name and slug based on pattern order
+                    if 'slug' in pattern and pattern.index('slug') < pattern.index('name'):
+                        slug, name = groups[0], groups[1]
+                    else:
+                        name, slug = groups[0], groups[1]
+                    
+                    # Extract image if present
+                    image_match = re.search(r'"(?:image|img|thumbnail|src)"\s*:\s*"([^"]+)"', matched_text)
+                    image_url = image_match.group(1) if image_match else ''
+                    
+                    # Skip duplicates and invalid entries
+                    if name in seen_names or not name.strip():
+                        continue
+                    
+                    # Skip common non-performer names
+                    if name.lower() in ['loading', 'error', 'null', 'undefined']:
+                        continue
+                    
+                    seen_names.add(name)
+                    
+                    # Validate image URL
+                    if image_url and not image_url.startswith(('http://', 'https://')):
+                        image_url = ''
+                    
+                    performer = Performer(
+                        name=name,
+                        slug=slug,
+                        image_url=image_url,
+                        source="freeones"
+                    )
+                    performers.append(performer)
+                    
+                except Exception as e:
+                    continue
+            
+            if performers:
+                break
+        
+        return performers
+    
+    def _extract_from_dom(self, html: str) -> List[Performer]:
+        """
+        Extract performers using BeautifulSoup DOM parsing.
+        
+        Args:
+            html: Raw HTML content
+        
+        Returns:
+            List of Performer objects
+        """
+        performers = []
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Look for performer cards/containers with multiple selector strategies
+        strategies = [
+            # Strategy 1: Look for links with profile in href
+            {
+                'selector': 'a[href*="/profile/"]',
+                'name_attr': None,
+                'img_attr': 'img'
+            },
+            # Strategy 2: Look for performer cards
+            {
+                'selector': '.performer-card, .performer-link, [data-test*="performer"]',
+                'name_attr': '.performer-name, .name, [data-test="performer-name"]',
+                'img_attr': 'img'
+            },
+            # Strategy 3: Look for grid items
+            {
+                'selector': '.grid-item, .card, .item',
+                'name_attr': 'a, .name, .title',
+                'img_attr': 'img'
+            }
+        ]
+        
+        seen_names = set()
+        
+        for strategy in strategies:
+            elements = soup.select(strategy['selector'])
+            
+            for element in elements:
+                try:
+                    # Get name
+                    name = None
+                    slug = ''
+                    image_url = ''
+                    
+                    # Check if element is a link with profile in href
+                    if element.name == 'a' and '/profile/' in element.get('href', ''):
+                        href = element.get('href', '')
+                        slug = href.split('/profile/')[-1].strip('/') if '/profile/' in href else ''
+                        name = element.get_text(strip=True)
                         
-                        # Skip duplicates and invalid entries
-                        if name in seen_names or not name.strip():
+                        # Get image if present
+                        img = element.find('img')
+                        if img:
+                            image_url = img.get('data-src') or img.get('src') or ''
+                    
+                    # Otherwise look for nested elements
+                    else:
+                        # Find name element
+                        if strategy['name_attr']:
+                            name_elem = element.select_one(strategy['name_attr'])
+                            if name_elem:
+                                name = name_elem.get_text(strip=True)
+                        
+                        # Find link for slug
+                        link = element.find('a', href=True)
+                        if link and '/profile/' in link.get('href', ''):
+                            href = link.get('href', '')
+                            slug = href.split('/profile/')[-1].strip('/')
+                        
+                        # Find image
+                        if strategy['img_attr']:
+                            img = element.find(strategy['img_attr'])
+                            if img:
+                                image_url = img.get('data-src') or img.get('src') or ''
+                    
+                    # Validate and add performer
+                    if name and slug and name not in seen_names:
+                        # Skip non-performer names
+                        if name.lower() in ['loading', 'error', 'null', 'undefined', 'view all']:
+                            continue
+                        
+                        # Skip very short or very long names
+                        if len(name) < 2 or len(name) > 100:
                             continue
                         
                         seen_names.add(name)
@@ -295,89 +464,61 @@ class FreeonesScraper(BaseScraper):
                         performers.append(performer)
                         
                 except Exception as e:
-                    logger.warning(f"Error parsing regex match: {e}")
                     continue
             
+            # If we found performers with this strategy, use it
             if performers:
-                break  # Use results from first successful pattern
+                break
         
         return performers
     
-    def _extract_from_dom(self, html: str) -> List[Performer]:
+    def _extract_names_only(self, html: str) -> List[Performer]:
         """
-        Extract performers using BeautifulSoup DOM parsing.
+        Extract performer names only as a last resort.
         
         Args:
             html: Raw HTML content
         
         Returns:
-            List of Performer objects
+            List of Performer objects (without images or slugs)
         """
         performers = []
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Look for performer cards/containers
-        # Freeones uses various class names for performer listings
-        container_selectors = [
-            '[data-test=" performer-card"]',
-            '.performer-card',
-            '.performer-link',
-            'a[href^="/profile/"]',
-        ]
-        
         seen_names = set()
         
-        for selector in container_selectors:
-            elements = soup.select(selector)
-            
-            for element in elements:
-                try:
-                    # Extract name
-                    name_element = element.find(
-                        ['span', 'div', 'p'],
-                        class_=re.compile(r'name|performer', re.I)
-                    )
-                    if not name_element:
-                        name_element = element
-                    
-                    name = name_element.get_text(strip=True)
-                    if not name or name in seen_names:
+        # Look for patterns that typically contain performer names
+        patterns = [
+            r'/"profile/([^"]+)">',  # href="/profile/xxx">
+            r'/profile/([^/]+)/',     # /profile/xxx/
+            r'"name":"([^"]+)","slug"',  # JSON pattern
+        ]
+        
+        for pattern in patterns:
+            matches = re.finditer(pattern, html)
+            for match in matches:
+                name = match.group(1)
+                if name and name not in seen_names and len(name) > 2 and len(name) < 100:
+                    # Skip common non-name patterns
+                    if name.lower() in ['loading', 'error', 'null', 'undefined']:
+                        continue
+                    if re.match(r'^\d+$', name):  # Skip pure numbers
                         continue
                     
-                    # Extract slug from href
-                    href = element.get('href', '')
-                    slug = ''
-                    if '/profile/' in href:
-                        slug = href.split('/profile/')[-1].strip('/')
+                    seen_names.add(name)
+                    slug = name.lower().replace(' ', '-').replace("'", "")
                     
-                    # Extract image
-                    img_element = element.find('img')
-                    image_url = ''
-                    if img_element:
-                        image_url = (
-                            img_element.get('data-src') or
-                            img_element.get('src') or
-                            ''
-                        )
-                    
-                    if name and slug:
-                        seen_names.add(name)
-                        performer = Performer(
-                            name=name,
-                            slug=slug,
-                            image_url=image_url,
-                            source="freeones"
-                        )
-                        performers.append(performer)
-                        
-                except Exception as e:
-                    logger.warning(f"Error parsing DOM element: {e}")
-                    continue
+                    performer = Performer(
+                        name=name,
+                        slug=slug,
+                        image_url='',
+                        source="freeones"
+                    )
+                    performers.append(performer)
             
             if performers:
-                break  # Use results from first successful selector
+                break
         
-        return performers
+        # Limit to reasonable number
+        return performers[:100]
     
     def validate_image_url(self, url: str) -> bool:
         """
@@ -405,7 +546,7 @@ class FreeonesScraper(BaseScraper):
             return True
         
         # Accept URLs that look like image CDN URLs
-        if any(domain in url for domain in ['freeones.com', 'cloudfront', 'amazonaws']):
+        if any(domain in url for domain in ['freeones.com', 'cloudfront', 'amazonaws', 'imgur']):
             return True
         
         return False

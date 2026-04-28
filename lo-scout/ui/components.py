@@ -6,8 +6,8 @@ Provides reusable UI components for the Streamlit interface.
 from typing import List, Dict, Any, Optional
 import streamlit as st
 
-from ..models.performer import Performer
-from ..models.filters import FilterConfig
+from models.performer import Performer
+from models.filters import FilterConfig
 
 
 def render_filter_sidebar() -> FilterConfig:
