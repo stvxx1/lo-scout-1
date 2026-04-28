@@ -15,6 +15,10 @@ class FilterConfig:
     max_height: Optional[int] = None  # Maximum height in cm
     min_weight: Optional[int] = None  # Minimum weight in kg
     max_weight: Optional[int] = None  # Maximum weight in kg
+    min_age: Optional[int] = None  # Minimum age
+    max_age: Optional[int] = None  # Maximum age
+    piercings: Optional[str] = None  # "yes", "no", or None
+    tattoos: Optional[str] = None  # "yes", "no", or None
     min_dick_length: Optional[int] = None  # Minimum dick length in cm (males only)
     max_dick_length: Optional[int] = None  # Maximum dick length in cm (males only)
     
@@ -46,30 +50,51 @@ class FilterConfig:
     
     def to_url_params(self) -> Dict[str, str]:
         """
-        Convert filter configuration to URL query parameters.
+        Convert filter configuration to URL query parameters using the new site structure.
         
         Returns:
             Dictionary of URL query parameters
         """
         params = {
-            "s": "rank.currentRank",
-            "o": "desc",
-            "gender": self.gender
+            "q": "",
+            "filter_mode[global]": "and"
         }
         
-        # Add height filters
-        if self.min_height is not None:
-            params["height_min"] = str(self.min_height)
-        if self.max_height is not None:
-            params["height_max"] = str(self.max_height)
+        # Performer Type (Gender)
+        p_type = "babe" if self.gender == "babes" else "male"
+        params["f[performerType]"] = p_type
+        params["filter_mode[performerType]"] = "and"
         
-        # Add weight filters
-        if self.min_weight is not None:
-            params["weight_min"] = str(self.min_weight)
-        if self.max_weight is not None:
-            params["weight_max"] = str(self.max_weight)
+        # Age Range
+        if self.min_age is not None or self.max_age is not None:
+            min_a = self.min_age if self.min_age is not None else 18
+            max_a = self.max_age if self.max_age is not None else 99
+            params["r[age]"] = f"{min_a},{max_a}"
         
-        # Add dick length filters (males only)
+        # Height Range
+        if self.min_height is not None or self.max_height is not None:
+            min_h = self.min_height if self.min_height is not None else 0
+            max_h = self.max_height if self.max_height is not None else 300
+            params["r[appearance.metric.height]"] = f"{min_h},{max_h}"
+        
+        # Weight Range
+        if self.min_weight is not None or self.max_weight is not None:
+            min_w = self.min_weight if self.min_weight is not None else 0
+            max_w = self.max_weight if self.max_weight is not None else 500
+            params["r[appearance.metric.weight]"] = f"{min_w},{max_w}"
+        
+        # Piercings
+        if self.piercings:
+            params["f[piercings]"] = self.piercings
+            params["filter_mode[piercings]"] = "and"
+            
+        # Tattoos
+        if self.tattoos:
+            params["f[tattoos]"] = self.tattoos
+            params["filter_mode[tattoos]"] = "and"
+        
+        # Dick length (males only) - using old params if still supported, 
+        # or we might need to find the new r[...] equivalent if it fails.
         if self.gender == "males":
             if self.min_dick_length is not None:
                 params["dick_min"] = str(self.min_dick_length)

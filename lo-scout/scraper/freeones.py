@@ -60,7 +60,7 @@ class FreeonesScraper(BaseScraper):
         
         # Add pagination parameter
         if page > 1:
-            params["page"] = str(page)
+            params["p"] = str(page) # Site uses 'p' for pagination in the new structure
         
         query_string = urlencode(params)
         url = f"{self.BASE_URL}{self.PERFORMERS_PATH}?{query_string}"
@@ -209,6 +209,10 @@ class FreeonesScraper(BaseScraper):
                 if not name:
                     continue
                 
+                # Skip non-performer names
+                if any(x in name.lower() for x in ['loading', 'error', 'null', 'undefined', 'view all', 'credits', 'transactions', 'overview']):
+                    continue
+                
                 slug = node.get('slug', '')
                 
                 # Extract image URL - try multiple fields
@@ -229,11 +233,15 @@ class FreeonesScraper(BaseScraper):
                         image_url = main_image
                 
                 # Extract gender if available
-                gender = 'female'  # Default
-                if 'gender' in node:
-                    gender_value = str(node.get('gender', '')).lower()
-                    if 'male' in gender_value:
+                gender = node.get('gender', 'female')
+                if gender:
+                    gender = str(gender).lower()
+                    if 'male' == gender or 'males' == gender:
                         gender = 'male'
+                    else:
+                        gender = 'female'
+                else:
+                    gender = 'female'
                 
                 # Validate image URL
                 if image_url and not image_url.startswith(('http://', 'https://')):
@@ -442,7 +450,7 @@ class FreeonesScraper(BaseScraper):
                     # Validate and add performer
                     if name and slug and name not in seen_names:
                         # Skip non-performer names
-                        if name.lower() in ['loading', 'error', 'null', 'undefined', 'view all']:
+                        if any(x in name.lower() for x in ['loading', 'error', 'null', 'undefined', 'view all', 'credits', 'transactions', 'overview']):
                             continue
                         
                         # Skip very short or very long names
@@ -498,9 +506,11 @@ class FreeonesScraper(BaseScraper):
                 name = match.group(1)
                 if name and name not in seen_names and len(name) > 2 and len(name) < 100:
                     # Skip common non-name patterns
-                    if name.lower() in ['loading', 'error', 'null', 'undefined']:
+                    if any(x in name.lower() for x in ['loading', 'error', 'null', 'undefined', 'credits', 'transactions', 'overview', 'window.', 'https:', 'path']):
                         continue
                     if re.match(r'^\d+$', name):  # Skip pure numbers
+                        continue
+                    if '\n' in name or '\r' in name: # Skip names with newlines
                         continue
                     
                     seen_names.add(name)
