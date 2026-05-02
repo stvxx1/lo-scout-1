@@ -1,33 +1,23 @@
-"""
-Performer data model for lo-scout application.
-"""
-
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
-import re
-
 
 @dataclass
 class Performer:
-    """Data class representing an adult performer."""
-    
-    name: str  # Required: Performer name
-    slug: str  # Required: URL-friendly identifier
-    image_url: str = ""  # Thumbnail image URL (can be empty)
-    height: Optional[int] = None  # Height in cm
-    weight: Optional[int] = None  # Weight in kg
-    gender: str = "female"  # "female" or "male"
-    source: str = "freeones"  # Source website identifier
-    
+    name: str
+    slug: str
+    image_url: str = ""
+    height: Optional[int] = None
+    weight: Optional[int] = None
+    gender: str = ""
+    source: str = ""
+
     def __post_init__(self):
-        """Validate required fields after initialization."""
-        if not self.name or not self.name.strip():
-            raise ValueError("Performer name is required")
-        if not self.slug or not self.slug.strip():
-            raise ValueError("Performer slug is required")
-    
+        if not self.name or not self.slug:
+            raise ValueError("Performer name and slug are required.")
+        if self.gender and self.gender not in ["female", "male"]:
+            raise ValueError("Gender must be 'female' or 'male'.")
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert performer to dictionary."""
         return {
             "name": self.name,
             "slug": self.slug,
@@ -35,62 +25,16 @@ class Performer:
             "height": self.height,
             "weight": self.weight,
             "gender": self.gender,
-            "source": self.source
+            "source": self.source,
         }
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Performer":
-        """Create Performer from dictionary."""
-        return cls(
-            name=data.get("name", ""),
-            slug=data.get("slug", ""),
-            image_url=data.get("image_url", ""),
-            height=data.get("height"),
-            weight=data.get("weight"),
-            gender=data.get("gender", "female"),
-            source=data.get("source", "freeones")
-        )
-    
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)
+
     def get_external_search_urls(self, external_sites: list) -> Dict[str, str]:
-        """
-        Generate search URLs for external sites.
-        
-        Args:
-            external_sites: List of site configs with 'name', 'pattern', 'icon'
-        
-        Returns:
-            Dictionary mapping site name to search URL
-        """
-        # URL-encode the performer name for search queries
-        query = self.name.replace(" ", "+")
-        
         urls = {}
         for site in external_sites:
-            pattern = site["pattern"]
-            url = pattern.format(query=query)
-            urls[site["name"]] = url
-        
+            query = self.name.replace(" ", "+")  # Basic URL-encoding
+            urls[site["name"]] = site["pattern"].format(query=query)
         return urls
-    
-    @property
-    def has_image(self) -> bool:
-        """Check if performer has a valid image URL."""
-        if not self.image_url:
-            return False
-        
-        # Basic URL validation
-        return self.image_url.startswith(("http://", "https://"))
-    
-    @property
-    def height_cm(self) -> Optional[int]:
-        """Get height in centimeters."""
-        return self.height
-    
-    @property
-    def weight_kg(self) -> Optional[int]:
-        """Get weight in kilograms."""
-        return self.weight
-    
-    def __str__(self) -> str:
-        """String representation of performer."""
-        return f"Performer(name='{self.name}', slug='{self.slug}')"
