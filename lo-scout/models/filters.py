@@ -23,15 +23,35 @@ class FilterConfig:
             raise ValueError("min_dick_length cannot be greater than max_dick_length.")
 
     def to_url_params(self) -> Dict[str, Any]:
-        params = {"gender": self.gender}
+        # Maps babes to babe and males to male for the new f[performerType] parameter
+        performer_type = "babe" if self.gender == "babes" else "male"
+        params = {
+            "f[performerType]": performer_type,
+            "filter_mode[performerType]": "and"
+        }
+        
+        # Note: height, weight and dick length filters might need further investigation 
+        # for the current website structure, but we keep the mapping for now.
         if self.min_height is not None: params["height_min"] = self.min_height
         if self.max_height is not None: params["height_max"] = self.max_height
         if self.min_weight is not None: params["weight_min"] = self.min_weight
         if self.max_weight is not None: params["weight_max"] = self.max_weight
+        
         if self.gender == "males":
             if self.min_dick_length is not None: params["dick_length_min"] = self.min_dick_length
             if self.max_dick_length is not None: params["dick_length_max"] = self.max_dick_length
         return params
+
+    def has_filters(self) -> bool:
+        """Check if any filters other than gender are active."""
+        return any([
+            self.min_height is not None,
+            self.max_height is not None,
+            self.min_weight is not None,
+            self.max_weight is not None,
+            self.min_dick_length is not None,
+            self.max_dick_length is not None
+        ])
 
     @classmethod
     def from_streamlit_state(cls, session_state: Dict[str, Any]):

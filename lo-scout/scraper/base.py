@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 import cloudscraper
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from fake_useragent import UserAgent
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors."""
@@ -12,23 +13,29 @@ class BaseScraper(ABC):
     base_url: str
     timeout: int = 30
     retries: int = 3
+    retry_delay: float = 2.0
 
-    def __init__(self):
-        self.scraper = cloudscraper.create_scraper()  # Create a cloudscraper instance
+    def __init__(self, timeout: int = 30, max_retries: int = 3, retry_delay: float = 2.0):
+        self.scraper = cloudscraper.create_scraper()
+        self.ua = UserAgent()
+        self.timeout = timeout
+        self.retries = max_retries
+        self.retry_delay = retry_delay
 
     def fetch_page(self, url: str) -> str:
         """Makes an HTTP request with retries and returns raw HTML content."""
+        headers = self.get_headers()
         for attempt in range(self.retries):
             try:
-                response = self.scraper.get(url, timeout=self.timeout)
-                response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+                response = self.scraper.get(url, headers=headers, timeout=self.timeout)
+                response.raise_for_status()
                 return response.text
             except Exception as e:
                 if attempt < self.retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(self.retry_delay)
                 else:
                     raise ScraperError(f"Failed to fetch {url} after {self.retries} attempts: {e}") from e
-        return "" # Should not be reached
+        return ""
 
     @abstractmethod
     def fetch_performers(self, page: int, filters: Any) -> List[Any]:
@@ -41,9 +48,15 @@ class BaseScraper(ABC):
         pass
 
     def get_headers(self) -> Dict[str, str]:
-        """Returns default headers for requests. Can be overridden by subclasses."""
+        """Returns default headers with a random user agent."""
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": self.ua.random,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": self.base_url,
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1"
         }
 
     def handle_error(self, message: str, original_exception: Optional[Exception] = None):

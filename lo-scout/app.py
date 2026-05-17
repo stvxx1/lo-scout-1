@@ -37,8 +37,32 @@ from ui.components import (
     render_pagination,
     render_loading_spinner,
     render_status_message,
-    render_filter_summary
+    render_filter_summary,
+    render_search_sort_bar
 )
+
+# ===== CACHED DATA FETCHING =====
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cached_performers(page, gender, min_height, max_height, min_weight, max_weight, min_dick, max_dick):
+    """Cached wrapper for fetching performers."""
+    scraper = FreeonesScraper(
+        timeout=SCRAPER_TIMEOUT,
+        max_retries=SCRAPER_MAX_RETRIES,
+        retry_delay=SCRAPER_RETRY_DELAY
+    )
+    
+    filters = FilterConfig(
+        gender=gender,
+        min_height=min_height,
+        max_height=max_height,
+        min_weight=min_weight,
+        max_weight=max_weight,
+        min_dick_length=min_dick,
+        max_dick_length=max_dick
+    )
+    
+    return scraper.fetch_performers(page=page, filters=filters)
+
 
 # ===== PAGE CONFIGURATION =====
 st.set_page_config(
@@ -83,26 +107,28 @@ def load_more_performers(filters: FilterConfig) -> bool:
     st.session_state.error_message = None
     
     try:
-        # Create scraper with configured settings
-        scraper = FreeonesScraper(
-            timeout=SCRAPER_TIMEOUT,
-            max_retries=SCRAPER_MAX_RETRIES,
-            retry_delay=SCRAPER_RETRY_DELAY
-        )
-        
-        # Increment page and fetch performers
+        # Increment page
         st.session_state.current_page += 1
         page = st.session_state.current_page
         
-        new_performers = scraper.fetch_performers(page=page, filters=filters)
+        # Call cached fetcher
+        new_performers = get_cached_performers(
+            page, 
+            filters.gender, filters.min_height, filters.max_height,
+            filters.min_weight, filters.max_weight,
+            filters.min_dick_length, filters.max_dick_length
+        )
         
         if not new_performers:
             st.session_state.all_performers_loaded = True
             st.session_state.is_loading = False
             return False
         
-        # Add new performers to the list
-        st.session_state.performers.extend(new_performers)
+        # Add new performers to the list (avoid duplicates)
+        existing_slugs = {p.slug for p in st.session_state.performers}
+        for p in new_performers:
+            if p.slug not in existing_slugs:
+                st.session_state.performers.append(p)
         
         # Check if we got a full page (if not, we're at the end)
         if len(new_performers) < ITEMS_PER_PAGE:
@@ -244,32 +270,46 @@ def main():
         """, unsafe_allow_html=True)
         st.stop()
     
+    # Search and Sort Bar
+    search_query, sort_option = render_search_sort_bar()
+    
+    # Filter and Sort Logic
+    display_performers = list(st.session_state.performers)
+    
+    # Apply search filter
+    if search_query:
+        display_performers = [p for p in display_performers if search_query.lower() in p.name.lower()]
+    
+    # Apply sorting
+    if sort_option == "Name (A-Z)":
+        display_performers.sort(key=lambda x: x.name)
+    elif sort_option == "Name (Z-A)":
+        display_performers.sort(key=lambda x: x.name, reverse=True)
+    elif sort_option == "Height (Tallest)":
+        display_performers.sort(key=lambda x: x.height or 0, reverse=True)
+    elif sort_option == "Height (Shortest)":
+        display_performers.sort(key=lambda x: x.height or 999)
+    
     # Display results count
-    total_performers = len(st.session_state.performers)
+    total_found = len(display_performers)
     st.markdown(
-        render_status_message(f"✨ Found <b>{total_performers}</b> performers", "success"),
+        render_status_message(f"✨ Found <b>{total_found}</b> performers matching your search", "success"),
         unsafe_allow_html=True
     )
     
     # Render performer grid
-    if st.session_state.performers:
+    if display_performers:
         # Use Streamlit columns for the grid layout
-        cols = st.columns(4)
+        grid_cols = st.columns(4)
         
-        for idx, performer in enumerate(st.session_state.performers):
-            with cols[idx % 4]:
+        for idx, performer in enumerate(display_performers):
+            with grid_cols[idx % 4]:
                 # Render each performer card
                 card_html = render_performer_card(performer, EXTERNAL_SITES)
                 st.markdown(card_html, unsafe_allow_html=True)
     
     # Render pagination
-    if not st.session_state.all_performers_loaded:
-        pagination_html = render_pagination(
-            current_page=st.session_state.current_page,
-            total_performers=total_performers,
-            items_per_page=ITEMS_PER_PAGE
-        )
-        
+    if not st.session_state.all_performers_loaded and not search_query:
         # Create a container for the Load More button
         load_more_col = st.columns([1, 2, 1])
         with load_more_col[1]:
@@ -281,12 +321,19 @@ def main():
         st.markdown(
             f'<div style="text-align: center; color: var(--text-secondary); margin: 16px 0;">'
             f'Page <span style="color: var(--accent-purple-light);">{st.session_state.current_page}</span> '
-            f'- Showing <span style="color: var(--accent-purple-light);">{total_performers}</span> performers'
+            f'- Showing <span style="color: var(--accent-purple-light);">{len(st.session_state.performers)}</span> total'
             f'</div>',
             unsafe_allow_html=True
         )
+    elif search_query:
+        st.markdown(
+            '<div style="text-align: center; color: var(--text-muted); margin: 24px 0;">'
+            '<i>Search filters are applied to loaded results. Clear search to load more.</i>'
+            '</div>',
+            unsafe_allow_html=True
+        )
     else:
-        if total_performers > 0:
+        if len(st.session_state.performers) > 0:
             st.markdown(
                 '<div style="text-align: center; color: var(--text-muted); margin: 24px 0;">'
                 '🎉 You\'ve reached the end of available performers!'

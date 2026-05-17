@@ -74,56 +74,28 @@ def get_css() -> str:
     .stApp {
         background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
         min-height: 100vh;
+        color: var(--text-primary);
     }
     
-    /* Hide Streamlit default elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* ===== SIDEBAR STYLES ===== */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-        border-right: 1px solid var(--border-primary);
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
     }
-    
-    section[data-testid="stSidebar"] .stMarkdown h1,
-    section[data-testid="stSidebar"] .stMarkdown h2,
-    section[data-testid="stSidebar"] .stMarkdown h3 {
-        color: var(--accent-purple-light);
-        font-weight: 700;
+    ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
     }
-    
-    /* Sidebar filter labels */
-    section[data-testid="stSidebar"] label {
-        color: var(--text-secondary) !important;
-        font-size: 0.9rem;
-        font-weight: 500;
+    ::-webkit-scrollbar-thumb {
+        background: var(--bg-tertiary);
+        border-radius: 4px;
     }
-    
-    /* Sidebar selectbox */
-    section[data-testid="stSidebar"] .stSelectbox > div > div {
-        background-color: var(--bg-tertiary) !important;
-        border: 1px solid var(--border-primary) !important;
-        border-radius: var(--radius-md) !important;
-    }
-    
-    section[data-testid="stSidebar"] .stSelectbox > div > div:hover {
-        border-color: var(--accent-purple) !important;
-    }
-    
-    /* Sidebar sliders */
-    section[data-testid="stSidebar"] .stSlider > div > div {
-        background-color: var(--accent-purple) !important;
-    }
-    
-    section[data-testid="stSidebar"] .stSlider span {
-        color: var(--text-secondary) !important;
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-purple);
     }
     
     /* ===== PERFORMER CARD STYLES ===== */
     .performer-card {
-        background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-tertiary) 100%);
+        background: rgba(30, 18, 48, 0.7);
+        backdrop-filter: blur(10px);
         border: 1px solid var(--border-primary);
         border-radius: var(--radius-lg);
         padding: var(--spacing-md);
@@ -131,28 +103,50 @@ def get_css() -> str:
         transition: all var(--transition-normal);
         overflow: hidden;
         position: relative;
-    }
-    
-    .performer-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(90deg, var(--accent-purple), var(--accent-magenta));
-        opacity: 0;
-        transition: opacity var(--transition-normal);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
     
     .performer-card:hover {
-        border-color: var(--border-hover);
-        transform: translateY(-4px);
+        border-color: var(--accent-purple);
+        transform: translateY(-5px);
         box-shadow: var(--shadow-lg), var(--shadow-glow);
     }
     
-    .performer-card:hover::before {
-        opacity: 1;
+    /* Info Overlay */
+    .info-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to top, rgba(15, 10, 26, 0.95), transparent);
+        padding: 40px 15px 15px;
+        transform: translateY(100%);
+        transition: transform var(--transition-normal);
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+    
+    .performer-card:hover .info-overlay {
+        transform: translateY(0);
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+    }
+    
+    .info-label {
+        color: var(--accent-purple-light);
+        font-weight: 600;
+    }
+
+    /* Grid layout fixes */
+    [data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] {
+        gap: 1.5rem;
     }
     
     /* Image container */

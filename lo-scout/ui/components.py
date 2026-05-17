@@ -177,7 +177,7 @@ def render_filter_sidebar() -> FilterConfig:
 
 def render_performer_card(performer: Performer, external_sites: List[Dict[str, Any]]) -> str:
     """
-    Render a single performer card with external site links.
+    Render a single performer card with external site links and info overlay.
     
     Args:
         performer: Performer object
@@ -190,10 +190,25 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
     search_urls = performer.get_external_search_urls(external_sites)
     
     # Build image HTML
-    if performer.has_image:
+    if performer.image_url:
         img_html = f'<img src="{performer.image_url}" alt="{performer.name}" loading="lazy">'
     else:
         img_html = '<div class="img-placeholder">👤</div>'
+    
+    # Build Info Overlay
+    info_items = []
+    if performer.age:
+        info_items.append(f'<div class="info-item"><span class="info-label">Age:</span> <span>{performer.age}</span></div>')
+    if performer.ethnicity:
+        info_items.append(f'<div class="info-item"><span class="info-label">Ethnicity:</span> <span>{performer.ethnicity}</span></div>')
+    if performer.measurements:
+        info_items.append(f'<div class="info-item"><span class="info-label">Stats:</span> <span>{performer.measurements}</span></div>')
+    if performer.height:
+        info_items.append(f'<div class="info-item"><span class="info-label">Height:</span> <span>{performer.height}cm</span></div>')
+    if performer.hair_color:
+        info_items.append(f'<div class="info-item"><span class="info-label">Hair:</span> <span>{performer.hair_color}</span></div>')
+    
+    info_overlay = f'<div class="info-overlay">{"".join(info_items)}</div>' if info_items else ""
     
     # Build external link buttons
     site_class_map = {
@@ -221,15 +236,41 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
     <div class="performer-card">
         <div class="img-box">
             {img_html}
+            {info_overlay}
         </div>
         <p class="performer-name" title="{performer.name}">{performer.name}</p>
-        <div class="external-links">
+        <div class="external-links" style="margin-top: auto;">
             {links_html}
         </div>
     </div>
     '''
     
     return card_html
+
+
+def render_search_sort_bar():
+    """
+    Render search and sort controls in the main content area.
+    
+    Returns:
+        Tuple of (search_query, sort_option)
+    """
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        search_query = st.text_input(
+            "🔍 Search performers...",
+            placeholder="Type a name to filter results...",
+            label_visibility="collapsed",
+            key="search_input"
+        )
+    with col2:
+        sort_option = st.selectbox(
+            "Sort by",
+            options=["Default", "Name (A-Z)", "Name (Z-A)", "Height (Tallest)", "Height (Shortest)"],
+            label_visibility="collapsed",
+            key="sort_selectbox"
+        )
+    return search_query, sort_option
 
 
 def render_performer_grid(performers: List[Performer], external_sites: List[Dict[str, Any]]) -> str:

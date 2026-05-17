@@ -10,12 +10,18 @@ class Performer:
     weight: Optional[int] = None
     gender: str = ""
     source: str = ""
+    age: Optional[int] = None
+    ethnicity: Optional[str] = None
+    measurements: Optional[str] = None
+    hair_color: Optional[str] = None
+    eye_color: Optional[str] = None
 
     def __post_init__(self):
         if not self.name or not self.slug:
             raise ValueError("Performer name and slug are required.")
-        if self.gender and self.gender not in ["female", "male"]:
-            raise ValueError("Gender must be 'female' or 'male'.")
+        # Normalize gender if it exists
+        if self.gender:
+            self.gender = self.gender.lower()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -26,6 +32,11 @@ class Performer:
             "weight": self.weight,
             "gender": self.gender,
             "source": self.source,
+            "age": self.age,
+            "ethnicity": self.ethnicity,
+            "measurements": self.measurements,
+            "hair_color": self.hair_color,
+            "eye_color": self.eye_color
         }
 
     @classmethod
