@@ -1,6 +1,3 @@
-import sys, os; sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import sys, os; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
-import sys, os; sys.path.append(os.getcwd())
 """
 LO-SCOUT TITAN V22 - Main Application
 Professional performer discovery tool with advanced filtering.
@@ -20,21 +17,17 @@ from config import (
     SCRAPER_MAX_RETRIES,
     SCRAPER_RETRY_DELAY,
     ENABLE_MANUAL_PASTE_MODE,
-    ENABLE_CACHE,
     APP_TITLE,
     APP_ICON,
     APP_DESCRIPTION
 )
 from scraper.freeones import FreeonesScraper
 from scraper.base import ScraperError
-from models.performer import Performer
 from models.filters import FilterConfig
 from ui.theme import get_css
 from ui.components import (
     render_filter_sidebar,
     render_performer_card,
-    render_performer_grid,
-    render_pagination,
     render_loading_spinner,
     render_status_message,
     render_filter_summary,
