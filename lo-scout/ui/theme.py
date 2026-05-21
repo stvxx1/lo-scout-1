@@ -262,51 +262,6 @@ def get_css() -> str:
         box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
     }
     
-    /* ===== PAGINATION STYLES ===== */
-    .pagination-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--spacing-md);
-        padding: var(--spacing-xl) 0;
-    }
-    
-    .page-info {
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        text-align: center;
-    }
-    
-    .page-info span {
-        color: var(--accent-purple-light);
-        font-weight: 600;
-    }
-    
-    .load-more-btn {
-        background: linear-gradient(135deg, var(--accent-purple), var(--accent-magenta)) !important;
-        color: white !important;
-        border: none !important;
-        padding: 12px 32px !important;
-        border-radius: var(--radius-lg) !important;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        cursor: pointer !important;
-        transition: all var(--transition-normal) !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    .load-more-btn:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: var(--shadow-glow) !important;
-    }
-    
-    .load-more-btn:disabled {
-        opacity: 0.5 !important;
-        cursor: not-allowed !important;
-        transform: none !important;
-    }
-    
     /* ===== LOADING SPINNER ===== */
     .loading-container {
         display: flex;
@@ -365,24 +320,8 @@ def get_css() -> str:
         font-weight: 600;
     }
     
-    /* ===== RESPONSIVE GRID ===== */
-    @media (max-width: 1200px) {
-        .performer-grid {
-            grid-template-columns: repeat(3, 1fr) !important;
-        }
-    }
-    
-    @media (max-width: 900px) {
-        .performer-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-        }
-    }
-    
+    /* ===== RESPONSIVE ADJUSTMENTS ===== */
     @media (max-width: 600px) {
-        .performer-grid {
-            grid-template-columns: 1fr !important;
-        }
-        
         .img-box {
             height: 220px !important;
         }

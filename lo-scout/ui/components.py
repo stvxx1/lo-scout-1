@@ -273,61 +273,6 @@ def render_search_sort_bar():
     return search_query, sort_option
 
 
-def render_performer_grid(performers: List[Performer], external_sites: List[Dict[str, Any]]) -> str:
-    """
-    Render a grid of performer cards.
-    
-    Args:
-        performers: List of Performer objects
-        external_sites: List of external site configurations
-    
-    Returns:
-        HTML string for the performer grid
-    """
-    if not performers:
-        return '<div class="status-message status-info">No performers found.</div>'
-    
-    cards_html = ""
-    for performer in performers:
-        cards_html += render_performer_card(performer, external_sites)
-    
-    return f'<div class="performer-grid">{cards_html}</div>'
-
-
-def render_pagination(current_page: int, total_performers: int, items_per_page: int = 48) -> str:
-    """
-    Render pagination controls with "Load More" button.
-    
-    Args:
-        current_page: Current page number (1-indexed)
-        total_performers: Total number of performers loaded so far
-        items_per_page: Number of items per page
-    
-    Returns:
-        HTML string for pagination controls
-    """
-    total_loaded_pages = current_page
-    total_items_shown = total_performers
-    
-    page_info = f'<div class="page-info">Page <span>{current_page}</span> - Showing <span>{total_items_shown}</span> performers</div>'
-    
-    # Load More button (always enabled - we don't know if there are more results until we try)
-    button_html = '''
-    <button class="load-more-btn" id="load-more-btn">
-        ⚡ Load More
-    </button>
-    '''
-    
-    pagination_html = f'''
-    <div class="pagination-container">
-        {page_info}
-        {button_html}
-    </div>
-    '''
-    
-    return pagination_html
-
-
 def render_loading_spinner(message: str = "Scanning performers...") -> str:
     """
     Render a loading spinner with message.
