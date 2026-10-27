@@ -100,36 +100,39 @@ def load_more_performers(filters: FilterConfig) -> bool:
     st.session_state.error_message = None
     
     try:
-        # Increment page
-        st.session_state.current_page += 1
-        page = st.session_state.current_page
-        
+        # Do not advance the counter yet: a failed page must stay retryable and a
+        # page that yields nothing new must end the list instead of looping forever.
+        page = st.session_state.current_page + 1
+
         # Call cached fetcher
         new_performers = get_cached_performers(
-            page, 
+            page,
             filters.gender, filters.min_height, filters.max_height,
             filters.min_weight, filters.max_weight,
             filters.min_dick_length, filters.max_dick_length
         )
-        
-        if not new_performers:
+
+        # Add new performers to the list (avoid duplicates)
+        existing_slugs = {p.slug for p in st.session_state.performers}
+        added = [p for p in new_performers if p.slug not in existing_slugs]
+
+        if not added:
+            # Empty page, or a page we have already seen (e.g. the API ignored the
+            # page parameter again): there is nothing more to load.
             st.session_state.all_performers_loaded = True
             st.session_state.is_loading = False
             return False
-        
-        # Add new performers to the list (avoid duplicates)
-        existing_slugs = {p.slug for p in st.session_state.performers}
-        for p in new_performers:
-            if p.slug not in existing_slugs:
-                st.session_state.performers.append(p)
-        
+
+        st.session_state.performers.extend(added)
+        st.session_state.current_page = page
+
         # Check if we got a full page (if not, we're at the end)
         if len(new_performers) < ITEMS_PER_PAGE:
             st.session_state.all_performers_loaded = True
-        
+
         st.session_state.last_filters = filters
         st.session_state.is_loading = False
-        
+
         return True
         
     except ScraperError as e:
@@ -239,20 +242,40 @@ def main():
     # Display filter summary if filters are active
     if st.session_state.last_filters and st.session_state.last_filters.has_filters():
         st.markdown(render_filter_summary(st.session_state.last_filters), unsafe_allow_html=True)
+
+    # The sidebar is live: without this, a changed filter has no effect until the
+    # results are reset, and Load More would append a page fetched with the new
+    # filters onto a list built with the old ones.
+    if st.session_state.last_filters is not None and st.session_state.last_filters != filters:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🔄 APPLY FILTERS", use_container_width=True, type="primary", key="apply_filters"):
+                reset_and_load(filters)
+                st.rerun()
     
     # Loading state
     if st.session_state.is_loading:
         st.markdown(render_loading_spinner("Scanning performers..."), unsafe_allow_html=True)
         st.stop()
     
-    # No results yet - show scan button
+    # No results yet - either nothing was scanned yet, or the scan came back empty
     if not st.session_state.performers:
+        scanned = st.session_state.last_filters is not None
+        if scanned and st.session_state.error_message is None:
+            st.markdown(
+                render_status_message(
+                    "No performers match these filters. Try widening the ranges.", "error"
+                ),
+                unsafe_allow_html=True,
+            )
+
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 RUN AUTO-SCAN", use_container_width=True, type="primary"):
+            label = "🔁 SCAN AGAIN" if scanned else "🚀 RUN AUTO-SCAN"
+            if st.button(label, use_container_width=True, type="primary"):
                 reset_and_load(filters)
                 st.rerun()
-        
+
         st.markdown("""
         <div style="text-align: center; margin-top: 40px; color: var(--text-muted);">
             <p>Click the button above to start scanning performers from Freeones.com</p>
