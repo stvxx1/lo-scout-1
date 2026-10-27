@@ -8,35 +8,48 @@ from typing import List, Dict, Any
 # ===== EXTERNAL SITE CONFIGURATIONS =====
 # These sites will be used for performer search links
 
+# Each pattern was checked against the live site; `encoding` selects how the
+# performer name is escaped before it is dropped into the template
+# (see links.encode_query). Getting either half wrong silently lands the user
+# on an age wall, a 404, or a search page that ignores the query.
 EXTERNAL_SITES: List[Dict[str, Any]] = [
     {
         "name": "XVideos",
         "pattern": "https://www.xvideos.com/?k={query}",
+        "encoding": "quote_plus",
         "icon": "XV",
         "description": "Popular adult video site"
     },
     {
         "name": "Eporner",
+        # 302s to the canonical /tag/<name>/ page; %20 keeps multi-word names intact.
         "pattern": "https://www.eporner.com/search/{query}/",
+        "encoding": "quote",
         "icon": "EP",
         "description": "High-quality adult videos"
     },
     {
         "name": "Sxyprn",
-        "pattern": "https://www.sxyprn.com/search/{query}/",
+        # The trailing .html is required: /search/<name>/ returns a hard 404.
+        "pattern": "https://www.sxyprn.com/search/{query}.html",
+        "encoding": "slug",
         "icon": "SX",
         "description": "Adult video search engine"
     },
     {
         "name": "Xmoviesforyou",
-        "pattern": "https://www.xmoviesforyou.com/search/{query}/",
+        # Taken from the site's own JSON-LD SearchAction; /search/<name>/ drops the query.
+        "pattern": "https://xmoviesforyou.com/search?q={query}",
+        "encoding": "quote_plus",
         "icon": "XM",
         "description": "Adult movie database"
     }
 ]
 
 # ===== PAGINATION SETTINGS =====
-ITEMS_PER_PAGE: int = 48  # Number of performers to load per page
+# Freeones' own default page size (robots.txt disallows overriding it with l=).
+# app.py compares a page's row count against this to detect the end of the list.
+ITEMS_PER_PAGE: int = 24
 
 # ===== FREEONES CONFIGURATION =====
 FREEONES_BASE_URL: str = "https://www.freeones.com"

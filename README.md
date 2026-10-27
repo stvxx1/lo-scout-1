@@ -6,8 +6,9 @@ A professional Streamlit web application for discovering adult performers with a
 
 - 🔮 **Advanced Filtering**: Filter performers by gender, height, weight, and length (for males)
 - 📸 **Reliable Scraping**: Multiple extraction strategies for maximum success rate
-- 🔄 **Pagination**: Load more performers with "Load More" button (48 per page)
+- 🔄 **Pagination**: Load more performers with "Load More" button (24 per page, Freeones' own default)
 - 🔗 **4-Site Integration**: Search performers on XVideos, Eporner, Sxyprn, and Xmoviesforyou
+- 🖼️ **Resilient Portraits**: signed Freeones CDN images, initials fallback when a host fails
 - 🎨 **Dark Theme**: Professional seductive UI with purple and magenta accents
 - 📋 **Manual Mode**: Paste HTML source for when auto-fetch fails
 
@@ -84,7 +85,7 @@ lo-scout-1/
 
 Edit `config.py` to customize:
 - External site URLs and icons
-- Items per page (default: 48)
+- Items per page (default: 24 — Freeones' own default; `robots.txt` forbids `l=`)
 - Scraper timeout and retry settings
 - Theme colors
 - Default filter values

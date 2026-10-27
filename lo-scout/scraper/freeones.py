@@ -8,6 +8,26 @@ from scraper.base import BaseScraper
 from models.performer import Performer
 from models.filters import FilterConfig
 from config import ITEMS_PER_PAGE
+from thumbnails import pick_largest_srcset
+
+
+def best_image_url(img_elem) -> str:
+    """Return the best portrait URL available on a listing card.
+
+    ``src`` normally holds the real signed CDN URL, but lazy-loaded markup
+    sometimes leaves a placeholder there and defers the real URL to
+    ``data-src``/``srcset``; checking them in order keeps the grid populated
+    if Freeones changes the markup.
+    """
+    if not img_elem:
+        return ""
+    for attr in ("src", "data-src", "data-original"):
+        value = (img_elem.get(attr) or "").strip()
+        if value and not value.startswith("data:"):
+            return value
+    srcset = img_elem.get("srcset") or img_elem.get("data-srcset") or ""
+    return pick_largest_srcset(srcset)
+
 
 class FreeonesScraper(BaseScraper):
     site_name: str = "freeones"
@@ -17,13 +37,18 @@ class FreeonesScraper(BaseScraper):
         super().__init__(timeout=timeout, max_retries=max_retries, retry_delay=retry_delay)
 
     def build_search_url(self, filters: FilterConfig, page: int) -> str:
+        """Build a listing URL that stays inside freeones.com/robots.txt.
+
+        robots.txt disallows ``*s=``, ``*o=``, ``*l=`` and ``*p=1$``, so the URL
+        carries the filters only, plus ``p`` from page 2 onward. Nothing is
+        lost: the default listing order is already rank ascending (verified --
+        the default page returns the same name sequence as
+        ``s=rank.currentRank&o=asc``), and the default page size matches
+        ITEMS_PER_PAGE.
+        """
         params = filters.to_url_params()
-        # "p" is the pagination parameter Freeones actually honours ("page" is ignored).
-        # Rank is ascending: rank 1 is the most-viewed profile, so "asc" is best-first.
-        params["s"] = "rank.currentRank"
-        params["o"] = "asc"
-        params["p"] = page
-        params["l"] = ITEMS_PER_PAGE
+        if page > 1:
+            params["p"] = page
         query_string = urlencode({k: v for k, v in params.items() if v is not None})
         return f"{urljoin(self.base_url, '/performers')}?{query_string}"
 
@@ -71,7 +96,7 @@ class FreeonesScraper(BaseScraper):
                 
                 # Image
                 img_elem = div.find("img", class_="image-content")
-                image_url = img_elem.get("src") if img_elem else ""
+                image_url = best_image_url(img_elem)
                 
                 if name and slug:
                     performers.append(Performer(

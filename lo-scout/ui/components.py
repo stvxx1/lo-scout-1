@@ -4,10 +4,13 @@ Provides reusable UI components for the Streamlit interface.
 """
 
 from typing import List, Dict, Any, Optional
+import html
+
 import streamlit as st
 
 from models.performer import Performer
 from models.filters import FilterConfig
+from thumbnails import portrait_html
 
 
 def _ordered_range(low: Optional[int], high: Optional[int]) -> tuple:
@@ -215,24 +218,26 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
     # Generate external search URLs
     search_urls = performer.get_external_search_urls(external_sites)
     
-    # Build image HTML
-    if performer.image_url:
-        img_html = f'<img src="{performer.image_url}" alt="{performer.name}" loading="lazy">'
-    else:
-        img_html = '<div class="img-placeholder">👤</div>'
+    # Image: escaped, with an initials tile behind it, so a failed load
+    # degrades instead of showing a broken-image icon.
+    img_html = portrait_html(performer.name, performer.image_url)
     
-    # Build Info Overlay
+    # Build Info Overlay. Values come from the scraped page, so they are
+    # escaped: an unescaped quote or ampersand breaks the surrounding markup.
     info_items = []
     if performer.age:
         info_items.append(f'<div class="info-item"><span class="info-label">Age:</span> <span>{performer.age}</span></div>')
-    if performer.ethnicity:
-        info_items.append(f'<div class="info-item"><span class="info-label">Ethnicity:</span> <span>{performer.ethnicity}</span></div>')
-    if performer.measurements:
-        info_items.append(f'<div class="info-item"><span class="info-label">Stats:</span> <span>{performer.measurements}</span></div>')
-    if performer.height:
-        info_items.append(f'<div class="info-item"><span class="info-label">Height:</span> <span>{performer.height}cm</span></div>')
-    if performer.hair_color:
-        info_items.append(f'<div class="info-item"><span class="info-label">Hair:</span> <span>{performer.hair_color}</span></div>')
+    for label, value, suffix in (
+        ("Ethnicity", performer.ethnicity, ""),
+        ("Stats", performer.measurements, ""),
+        ("Height", performer.height, "cm"),
+        ("Hair", performer.hair_color, ""),
+    ):
+        if value:
+            info_items.append(
+                f'<div class="info-item"><span class="info-label">{label}:</span> '
+                f'<span>{html.escape(str(value))}{suffix}</span></div>'
+            )
     
     info_overlay = f'<div class="info-overlay">{"".join(info_items)}</div>' if info_items else ""
     
@@ -251,20 +256,24 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
         site_class = site_class_map.get(site_name, "")
         url = search_urls.get(site_name, "#")
         
+        safe_url = html.escape(url, quote=True)
+        safe_site = html.escape(site_name, quote=True)
         links_html += f'''
-        <a class="tube-link {site_class}" href="{url}" target="_blank" rel="noopener noreferrer" title="Search {site_name}">
+        <a class="tube-link {site_class}" href="{safe_url}" target="_blank" rel="noopener noreferrer" title="Search {safe_site}">
             {site_icon}
         </a>
         '''
     
-    # Build card HTML
+    # Build card HTML. The name lands in both an attribute and a text node,
+    # so it is escaped for each; unescaped quotes silently kill the <img>.
+    safe_name = html.escape(performer.name, quote=True)
     card_html = f'''
     <div class="performer-card">
         <div class="img-box">
             {img_html}
             {info_overlay}
         </div>
-        <p class="performer-name" title="{performer.name}">{performer.name}</p>
+        <p class="performer-name" title="{safe_name}">{safe_name}</p>
         <div class="external-links" style="margin-top: auto;">
             {links_html}
         </div>

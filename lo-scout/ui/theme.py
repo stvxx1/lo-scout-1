@@ -152,7 +152,11 @@ def get_css() -> str:
     /* Image container */
     .img-box {
         width: 100%;
-        height: 280px;
+        /* Freeones portraits are 350x466. Matching that ratio means the image
+           is never cropped, and the grid does not shift while 48 lazy images
+           stream in. */
+        aspect-ratio: 350 / 466;
+        height: auto;
         overflow: hidden;
         border-radius: var(--radius-md);
         margin-bottom: var(--spacing-md);
@@ -161,14 +165,40 @@ def get_css() -> str:
     }
     
     .img-box img {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         object-fit: cover;
+        /* Keep faces in frame if the box is ever shorter than the source. */
+        object-position: center top;
         transition: transform var(--transition-slow);
+        z-index: 1;
     }
     
     .performer-card:hover .img-box img {
         transform: scale(1.05);
+    }
+
+    /* Initials tile painted behind every portrait. A failed load hides the
+       <img> (see thumbnails.portrait_html) and reveals this, so a dead CDN
+       URL degrades to a tinted monogram instead of a broken-image icon. */
+    .img-fallback {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(150deg, var(--tint, var(--bg-tertiary)), var(--bg-secondary));
+        color: rgba(245, 243, 255, 0.55);
+        font-size: 2.4rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        user-select: none;
+    }
+
+    .img-box img.img-broken {
+        display: none;
     }
     
     /* Placeholder for missing images */

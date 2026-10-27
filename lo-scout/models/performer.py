@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
+from links import build_search_urls
+
 @dataclass
 class Performer:
     name: str
@@ -44,8 +46,10 @@ class Performer:
         return cls(**data)
 
     def get_external_search_urls(self, external_sites: list) -> Dict[str, str]:
-        urls = {}
-        for site in external_sites:
-            query = self.name.replace(" ", "+")  # Basic URL-encoding
-            urls[site["name"]] = site["pattern"].format(query=query)
-        return urls
+        """Return ``{site_name: search_url}`` for the configured tube sites.
+
+        Encoding lives in :mod:`links` because each site expects a different
+        one, and a naive ``name.replace(" ", "+")`` corrupts names that contain
+        ``&``, ``'`` or ``#``.
+        """
+        return build_search_urls(external_sites, self.name)

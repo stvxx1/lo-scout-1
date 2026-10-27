@@ -3,3 +3,4 @@ cloudscraper==1.2.71
 beautifulsoup4==4.15.0
 fake-useragent==2.2.0
 requests==2.34.2
+pillow==13.0.0

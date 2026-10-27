@@ -21,12 +21,19 @@ FIXTURE = Path(__file__).parent / "fixtures" / "fo_asc48.html"
 
 # --- URL building ---------------------------------------------------------
 
-def test_pagination_uses_p_and_ascending_rank():
-    url = FreeonesScraper().build_search_url(FilterConfig(), 3)
-    assert "p=3" in url
-    assert "page=" not in url
-    assert "o=asc" in url
-    assert "l=48" in url
+def test_pagination_respects_robots_txt():
+    first = FreeonesScraper().build_search_url(FilterConfig(), 1)
+    deeper = FreeonesScraper().build_search_url(FilterConfig(), 3)
+
+    # robots.txt: Disallow /*p=1$ -- page one must not carry a page param at all.
+    assert "p=" not in first
+    assert "p=3" in deeper
+
+    # robots.txt: Disallow /*s=, /*o=, /*l= -- the default order already is
+    # rank ascending and the default page size already matches ITEMS_PER_PAGE.
+    for forbidden in ("s=", "o=", "l="):
+        assert forbidden not in first, first
+        assert forbidden not in deeper, deeper
 
 
 def test_no_range_params_by_default():
@@ -107,8 +114,9 @@ def test_changed_filters_offer_a_rescan():
 @pytest.mark.live
 def test_live_first_page_is_top_ranked_with_images():
     performers = FreeonesScraper().fetch_performers(1, FilterConfig())
-    assert len(performers) == 48
-    assert sum(1 for p in performers if p.image_url) >= 45
+    # Freeones' default page size is 24; only assert it is a real page.
+    assert len(performers) >= 20
+    assert sum(1 for p in performers if p.image_url) >= len(performers) - 2
 
 
 @pytest.mark.live
@@ -123,11 +131,12 @@ def test_live_load_more_advances_pages():
     at.run()
     [b for b in at.button if "AUTO-SCAN" in b.label][0].click()
     at.run()
-    assert len(at.session_state["performers"]) == 48
+    first_page = len(at.session_state["performers"])
+    assert first_page >= 20
 
     more = [b for b in at.button if "LOAD MORE" in b.label]
     assert more, "LOAD MORE not shown"
     more[0].click()
     at.run()
-    assert len(at.session_state["performers"]) == 96
+    assert len(at.session_state["performers"]) > first_page
     assert at.session_state["current_page"] == 2
