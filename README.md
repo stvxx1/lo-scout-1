@@ -13,23 +13,28 @@ A professional Streamlit web application for discovering adult performers with a
 
 ## Installation
 
-1. Clone the repository:
 ```bash
-cd lo-scout-1
+./run.sh
 ```
 
-2. Install dependencies:
+`run.sh` creates `.venv` on first launch, installs `requirements.txt`, and starts
+the app at `http://localhost:8501`.
+
+Manual equivalent:
+
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/streamlit run lo-scout/app.py
 ```
 
-3. Run the application:
-```bash
-cd lo-scout
-streamlit run app.py
-```
+## Tests
 
-4. Open your browser to `http://localhost:8501`
+```bash
+./.venv/bin/pip install -r requirements-dev.txt
+./.venv/bin/pytest -q            # offline, uses tests/fixtures
+./.venv/bin/pytest -q -m live    # hits freeones.com
+```
 
 ## Usage
 
