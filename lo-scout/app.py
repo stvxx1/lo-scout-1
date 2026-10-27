@@ -6,7 +6,6 @@ Professional performer discovery tool with advanced filtering.
 import streamlit as st
 import sys
 import os
-import json
 
 # Add the lo-scout directory to the path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

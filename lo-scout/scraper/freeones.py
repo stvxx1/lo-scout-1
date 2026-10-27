@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from models.performer import Performer
 from models.filters import FilterConfig
-from config import ITEMS_PER_PAGE
 from thumbnails import pick_largest_srcset
 
 
@@ -105,7 +104,7 @@ class FreeonesScraper(BaseScraper):
                         image_url=image_url,
                         source=self.site_name
                     ))
-            except Exception as e:
+            except Exception:
                 continue
                 
         return performers
