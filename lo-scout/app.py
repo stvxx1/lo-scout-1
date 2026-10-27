@@ -28,6 +28,7 @@ from scraper import porndb
 from models.filters import FilterConfig
 from ui.theme import get_css
 from ui.profile_panel import show_profile
+from ui.similar_panel import show_similar
 from ui.video_panel import show_clips
 from ui.components import (
     render_filter_sidebar,
@@ -371,15 +372,26 @@ def main():
                     ):
                         show_clips(performer.name)
 
-                # Only offered when a key is configured: without one the dialog
-                # has nothing to show but an explanation.
-                if porndb.is_configured() and st.button(
-                    "ℹ️ Profile",
-                    key=f"profile_{performer.slug}",
-                    use_container_width=True,
-                    help=f"Bio, measurements and links for {performer.name}",
-                ):
-                    show_profile(performer.name)
+                # Both are offered only when a key is configured: without one
+                # each dialog has nothing to show but an explanation.
+                if porndb.is_configured():
+                    info_col, similar_col = st.columns(2)
+                    with info_col:
+                        if st.button(
+                            "ℹ️ Profile",
+                            key=f"profile_{performer.slug}",
+                            use_container_width=True,
+                            help=f"Bio, measurements and links for {performer.name}",
+                        ):
+                            show_profile(performer.name)
+                    with similar_col:
+                        if st.button(
+                            "🔎 Similar",
+                            key=f"similar_{performer.slug}",
+                            use_container_width=True,
+                            help=f"Find performers in {performer.name}'s height range",
+                        ):
+                            show_similar(performer.name, performer.slug)
     
     # Render pagination
     if favourites_only:

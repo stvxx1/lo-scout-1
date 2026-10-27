@@ -302,6 +302,35 @@ def get_css() -> str:
         font-size: 0.75rem;
         color: var(--text-secondary);
     }
+
+    /* Similar-performer cells: portrait over name, sized to the dialog grid */
+    .similar-head {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+
+    .similar-portrait {
+        width: 100%;
+        aspect-ratio: 350 / 466;
+        object-fit: cover;
+        object-position: center top;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-primary);
+        background: var(--bg-tertiary);
+    }
+
+    .similar-portrait-empty {
+        background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    }
+
+    .similar-name {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
     
     /* Placeholder for missing images */
     .img-placeholder {

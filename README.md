@@ -12,6 +12,8 @@ A professional Streamlit web application for discovering adult performers with a
 - ⭐ **Favourites**: save performers to a local sqlite db, browse them before any scan, export/import JSON
 - 🎬 **Clip Panel**: search Eporner and RedTube for a performer and play the results inline
 - ℹ️ **Profiles**: bios, measurements and aliases from ThePornDB (optional API key)
+- 🔎 **Find Similar**: one click returns performers inside her height/weight window, filtered by Freeones itself
+- 📚 **Second Opinion**: StashDB stats and portraits beside the ThePornDB profile (optional API key)
 - 🎨 **Dark Theme**: Professional seductive UI with purple and magenta accents
 - 📋 **Manual Mode**: Paste HTML source for when auto-fetch fails
 
@@ -37,7 +39,7 @@ python3 -m venv .venv
 ```bash
 ./.venv/bin/pip install -r requirements-dev.txt
 ./.venv/bin/pytest -q            # offline, uses tests/fixtures
-./.venv/bin/pytest -q -m live    # hits freeones.com
+./.venv/bin/pytest -q -m live    # hits freeones.com, plus any keyed source you configured
 ```
 
 ## Usage
@@ -52,6 +54,8 @@ python3 -m venv .venv
 3. Browse results in the 4-column grid
 4. Click "⚡ LOAD MORE" to load additional performers
 5. Click any site button (XV, EP, SX, XM) to search that performer on the external site
+6. With an API key configured, `ℹ️ Profile` opens her details and `🔎 Similar`
+   shows performers inside her height/weight window
 
 ### Manual Paste Mode
 1. Go to freeones.com in your browser
@@ -68,7 +72,11 @@ lo-scout-1/
 │   ├── scraper/
 │   │   ├── __init__.py
 │   │   ├── base.py          # Base scraper with HTTP client
-│   │   └── freeones.py      # Freeones-specific scraper
+│   │   ├── freeones.py      # Freeones listing scraper
+│   │   ├── porndb.py        # ThePornDB profiles (keyed)
+│   │   ├── stashdb.py       # StashDB profiles via GraphQL (keyed)
+│   │   ├── similar.py       # "More like her" window, built on Freeones filters
+│   │   └── videos.py        # Eporner/RedTube clip search
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── performer.py     # Performer data model
@@ -76,9 +84,14 @@ lo-scout-1/
 │   ├── ui/
 │   │   ├── __init__.py
 │   │   ├── theme.py         # CSS theme with dark seductive styling
-│   │   └── components.py    # Reusable UI components
+│   │   ├── components.py    # Reusable UI components
+│   │   ├── profile_panel.py # Profile dialog (ThePornDB + StashDB)
+│   │   ├── similar_panel.py # Similar-performer dialog
+│   │   └── video_panel.py   # Clip dialog
+│   ├── credentials.py       # API-key lookup shared by the keyed sources
 │   ├── config.py            # Application configuration
 │   └── app.py               # Main Streamlit application
+├── tests/                   # offline by default, -m live for the network
 ├── requirements.txt
 ├── implementation_plan.md
 └── README.md
@@ -114,6 +127,42 @@ The key is read from `$PORNDB_API_KEY`, `$LO_SCOUT_HOME/secrets.toml`, or
 `.streamlit/secrets.toml` beside the app, the working directory or `~`.
 Results are cached for 24 hours, and only cards with a *missing* portrait are
 looked up (at most 6 per page), so a healthy listing costs no requests at all.
+
+The same key is what powers **Find Similar**: it supplies the anchor height and
+weight, which then become ordinary Freeones filters (`157,169` on
+`r[appearance.metric.height]`). No key, no anchor -- so the button is hidden
+rather than showing a dialog that cannot do anything.
+
+### StashDB (optional, needs its own key)
+
+StashDB is a second, crowd-curated source. Create a key in your
+[StashDB](https://stashdb.org) account settings and add it the same way:
+
+```toml
+STASHDB_API_KEY = "your-key-here"
+```
+
+With it, the Profile dialog gains a **StashDB** tab (curated band/waist/hip
+integers, career start year, scene count, a scene-linked portrait) and the source
+label makes clear which record you are reading. Without it, the tab simply isn't
+there.
+
+Two details worth knowing:
+
+- the endpoint is GraphQL, and unauthenticated queries answer HTTP 200 with
+  `{"errors": [{"message": "not authorized"}]}` — that failure is *not* cached,
+  so fixing the key takes effect immediately;
+- names are matched strictly (exact name, then exact alias, then a lone result).
+  ThePornDB's search is fuzzy enough to justify containment matching; stash-box's
+  is not, and showing a stranger's measurements is worse than showing nothing.
+
+### Boobpedia: deliberately not used
+
+Boobpedia has the richest trivia, but its `robots.txt` disallows `/wiki/api.php`
+and `/wiki/index.php?*action=` — i.e. both the MediaWiki API and the raw-wikitext
+route. Scraping the rendered pages around that would be working around a stated
+preference, so the app doesn't. ThePornDB and StashDB are both APIs that invite
+this use.
 
 ## External Sites
 
@@ -159,11 +208,26 @@ https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&heigh
 - Some performers may not have images (shows placeholder)
 - Image URLs are validated before display
 - With `PORNDB_API_KEY` set, cards with no portrait fall back to ThePornDB's
+  looking up that performer (at most 6 per page), so a broken source still shows faces
 
-### Profile dialog says "No ThePornDB API key configured"
+### Profile dialog says "No metadata API key configured"
 - Set `PORNDB_API_KEY` (see Configuration) and reload the page
 - Check the key with `curl -H "Authorization: Bearer $PORNDB_API_KEY" \
   "https://api.theporndb.net/performers?q=sara%20jay&per_page=1"`
+
+### Profile dialog shows no StashDB tab
+- The tab only exists when `STASHDB_API_KEY` is set **and** StashDB has that
+  performer. Check the key with:
+  `curl -H "ApiKey: $STASHDB_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"query":"{ queryPerformers(input: {names: \"Sara Jay\"}) { count } }"}' \
+  https://stashdb.org/graphql`
+- Without a key that call answers `{"errors":[{"message":"not authorized"}]}`
+
+### "Find Similar" says there are no stats to match on
+- The window is built from ThePornDB's height/weight, so the performer needs a
+  profile that has them; try the height range in the sidebar instead
+- A window that comes back empty is possible — the height facet is genuinely
+  narrow (±6 cm), which is the point
 
 ### Filters not working
 - Ensure min values are less than max values
