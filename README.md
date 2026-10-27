@@ -9,6 +9,8 @@ A professional Streamlit web application for discovering adult performers with a
 - 🔄 **Pagination**: Load more performers with "Load More" button (24 per page, Freeones' own default)
 - 🔗 **4-Site Integration**: Search performers on XVideos, Eporner, Sxyprn, and Xmoviesforyou
 - 🖼️ **Resilient Portraits**: signed Freeones CDN images, initials fallback when a host fails
+- ⭐ **Favourites**: save performers to a local sqlite db, browse them before any scan, export/import JSON
+- 🎬 **Clip Panel**: search Eporner and RedTube for a performer and play the results inline
 - 🎨 **Dark Theme**: Professional seductive UI with purple and magenta accents
 - 📋 **Manual Mode**: Paste HTML source for when auto-fetch fails
 

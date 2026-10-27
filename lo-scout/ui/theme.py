@@ -200,6 +200,29 @@ def get_css() -> str:
     .img-box img.img-broken {
         display: none;
     }
+
+    /* Clip panel thumbnails (ui/video_panel.py): 16:9, same treatment as the
+       portrait tiles so the modal does not look like a different app. */
+    .clip-thumb {
+        display: block;
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        border-radius: var(--radius-sm);
+        margin-bottom: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-primary);
+    }
+
+    .clip-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .clip-thumb:hover {
+        border-color: var(--accent-purple);
+    }
     
     /* Placeholder for missing images */
     .img-placeholder {

@@ -27,6 +27,7 @@ from scraper.freeones import FreeonesScraper
 from scraper.base import ScraperError
 from models.filters import FilterConfig
 from ui.theme import get_css
+from ui.video_panel import show_clips
 from ui.components import (
     render_filter_sidebar,
     render_performer_card,
@@ -345,14 +346,25 @@ def main():
                 st.markdown(card_html, unsafe_allow_html=True)
 
                 is_saved = performer.slug in saved_slugs
-                if st.button(
-                    "⭐ Saved" if is_saved else "☆ Save",
-                    key=f"fav_{performer.slug}",
-                    use_container_width=True,
-                    help="Add or remove this performer from your favourites",
-                ):
-                    storage.toggle_favorite(performer)
-                    st.rerun()
+                # Two actions per card: keep her, or go looking for clips.
+                save_col, clips_col = st.columns(2)
+                with save_col:
+                    if st.button(
+                        "⭐ Saved" if is_saved else "☆ Save",
+                        key=f"fav_{performer.slug}",
+                        use_container_width=True,
+                        help="Add or remove this performer from your favourites",
+                    ):
+                        storage.toggle_favorite(performer)
+                        st.rerun()
+                with clips_col:
+                    if st.button(
+                        "🎬 Clips",
+                        key=f"clips_{performer.slug}",
+                        use_container_width=True,
+                        help=f"Find clips of {performer.name} on Eporner and RedTube",
+                    ):
+                        show_clips(performer.name)
     
     # Render pagination
     if favourites_only:
