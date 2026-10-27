@@ -147,14 +147,29 @@ integers, career start year, scene count, a scene-linked portrait) and the sourc
 label makes clear which record you are reading. Without it, the tab simply isn't
 there.
 
-Two details worth knowing:
+Values are formatted the way ThePornDB writes them (`163cm`, `36E`, `American`)
+because the two tabs share one stat grid, and a grid that reads `163cm` on one
+tab and `163 cm` on the next looks like a bug rather than a second source.
+
+Three details worth knowing:
 
 - the endpoint is GraphQL, and unauthenticated queries answer HTTP 200 with
   `{"errors": [{"message": "not authorized"}]}` — that failure is *not* cached,
   so fixing the key takes effect immediately;
 - names are matched strictly (exact name, then exact alias, then a lone result).
-  ThePornDB's search is fuzzy enough to justify containment matching; stash-box's
-  is not, and showing a stranger's measurements is worse than showing nothing.
+  This matters: asking for "Sara Jay" returns **Sara Jaymes first**, because
+  stash-box name search is fuzzy. ThePornDB's search is fuzzy enough to justify
+  containment matching; stash-box's is not, and showing a stranger's measurements
+  is worse than showing nothing;
+- portraits are plain `https://stashdb.org/images/<uuid>` URLs that load without
+  a key, so the `<img>` in the browser works for users who never configured one.
+
+The fixture in `tests/fixtures/stashdb_performer.json` is a recorded response,
+not a guess — and recording it was worth it: the hand-written version assumed
+`aliases` was one comma-separated string, while the live schema returns a list,
+which rendered every alias as `['Sarah Jay']`. It also documents where the second
+opinion pays off: both sources say 163cm and career start 2001, and they differ
+only in how they spell the measurements (`36E-25-41` versus `36-25-41`).
 
 ### Boobpedia: deliberately not used
 
@@ -222,6 +237,10 @@ https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&heigh
   -d '{"query":"{ queryPerformers(input: {names: \"Sara Jay\"}) { count } }"}' \
   https://stashdb.org/graphql`
 - Without a key that call answers `{"errors":[{"message":"not authorized"}]}`
+- A performer you know is on StashDB can still be dropped on purpose: the search
+  ranks fuzzily ("Sara Jay" returns Sara Jaymes first), and if no result matches
+  her name or an alias exactly, the tab stays closed rather than showing someone
+  else's measurements
 
 ### "Find Similar" says there are no stats to match on
 - The window is built from ThePornDB's height/weight, so the performer needs a

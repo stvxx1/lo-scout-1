@@ -1,12 +1,14 @@
 """StashDB lookups: key handling, matching, GraphQL errors, caching.
 
-    pytest -q            offline, replays a schema-shaped fixture
+    pytest -q            offline, replays a recorded response
     pytest -q -m live    also queries the real API (needs STASHDB_API_KEY)
 
-The fixture is *derived*, not captured: StashDB answers "not authorized" without
-a key, so its shape comes from the public introspection query (field names,
-enum values, and ``aliases`` being one comma-separated String are all confirmed
-against the live schema). The honest limit is that no real record was recorded.
+The fixture is a real response, recorded on 2026-10-28 and trimmed to the two
+largest images per record. Recording it earned its keep: the hand-written
+version had ``aliases`` as one comma-separated string, while the live schema
+returns a list, so every alias rendered as ``"['Sarah Jay']"``. The same call
+showed that "Sara Jay" returns "Sara Jaymes" *first* -- stash-box name search is
+fuzzy, and only the exact-name pass in :func:`best_match` saves the lookup.
 """
 
 import json
@@ -26,6 +28,17 @@ from ui.profile_panel import profile_html, profile_rows            # noqa: E402
 FIXTURES = Path(__file__).parent / "fixtures"
 PAYLOAD = json.loads((FIXTURES / "stashdb_performer.json").read_text(encoding="utf-8"))
 PROFILES = stashdb.parse_search(PAYLOAD)
+
+
+def profile_named(name):
+    """Return the parsed fixture profile called ``name``."""
+    return next(profile for profile in PROFILES if profile["name"] == name)
+
+
+# Order matters here: StashDB really does answer "Sara Jay" with Sara Jaymes
+# first, so every matching test runs against that ranking, not a tidy one.
+SARA = profile_named("Sara Jay")
+JAYMES = profile_named("Sara Jaymes")
 
 
 class FakeResponse:
@@ -88,37 +101,78 @@ def test_no_key_means_no_metadata_and_no_request(monkeypatch):
 # --- parsing --------------------------------------------------------------
 
 def test_parse_maps_a_record_onto_the_profile_shape():
-    profile = PROFILES[0]
-    assert profile["name"] == "Sara Jay"
-    assert profile["source"] == "StashDB"
-    extras = profile["extras"]
-    assert extras["height"] == "163 cm"
-    assert extras["measurements"] == "36-28-44"
-    assert extras["cupsize"] == "E"
+    assert SARA["name"] == "Sara Jay"
+    assert SARA["source"] == "StashDB"
+    extras = SARA["extras"]
+    # Formatting follows ThePornDB's, because both sources share one stat grid.
+    assert extras["height"] == "163cm"
+    assert extras["measurements"] == "36-25-41"
+    assert extras["cupsize"] == "36E"
     assert extras["hair_colour"] == "Blonde"
     assert extras["eye_colour"] == "Hazel"
     assert extras["ethnicity"] == "Caucasian"
+    assert extras["nationality"] == "American"
     assert extras["birthday"] == "1977-11-14"
-    assert extras["career_start_year"] == 2000
-    assert extras["scenes"] == 842
+    assert extras["career_start_year"] == 2001
+    assert extras["scenes"] == 570
 
 
-def test_parse_splits_the_comma_separated_alias_string():
-    assert PROFILES[0]["aliases"] == ["Sarah Jay", "Sara Jaye", "Piera Gambetta"]
-    assert PROFILES[1]["aliases"] == []
+def test_parse_keeps_the_alias_list_whole():
+    """The live field is a list; ``str()`` on it produced ``"['Sarah Jay']"``."""
+    assert SARA["aliases"] == ["Sarah Jay"]
+    assert JAYMES["aliases"][:3] == ["Ara", "Jessica", "Jessica X"]
+    assert not any(alias.startswith(("[", "'", '"')) for alias in JAYMES["aliases"])
+
+
+def test_comma_separated_aliases_still_parse():
+    """Older stash-box builds answered with one string; do not regress on them."""
+    assert stashdb._aliases({"aliases": "Sarah Jay, Piera Gambetta"}) == [
+        "Sarah Jay",
+        "Piera Gambetta",
+    ]
+    assert stashdb._aliases({"aliases": None}) == []
+    assert stashdb._aliases({}) == []
 
 
 def test_portrait_is_the_largest_image():
-    assert PROFILES[0]["image"].endswith("sara-jay-lg.jpg")
-    assert PROFILES[1]["image"] == ""
+    largest = max(
+        PAYLOAD["data"]["queryPerformers"]["performers"][1]["images"],
+        key=lambda image: image["width"],
+    )
+    assert SARA["image"] == largest["url"]
+    assert SARA["image"].startswith("https://stashdb.org/images/")
+    assert stashdb.to_profile({"name": "No Pictures", "images": []})["image"] == ""
 
 
 def test_unknown_enums_and_partial_measurements_are_dropped():
-    extras = PROFILES[1]["extras"]
-    assert "ethnicity" not in extras          # UNKNOWN is not a fact
-    assert "eye_colour" not in extras         # null
-    assert "measurements" not in extras       # waist missing, so no triple
+    extras = stashdb.to_profile(
+        {
+            "name": "Half A Record",
+            "ethnicity": "UNKNOWN",   # not a fact
+            "eye_color": None,
+            "band_size": None,        # no band, so the cup stays bare
+            "waist_size": None,       # no waist, so no measurements triple
+            "hip_size": 36,
+            "cup_size": "C",
+            "hair_color": "BROWN",
+            "country": None,
+        }
+    )["extras"]
+    assert "ethnicity" not in extras
+    assert "eye_colour" not in extras
+    assert "measurements" not in extras
+    assert "nationality" not in extras
+    assert extras["cupsize"] == "C"
     assert extras["hair_colour"] == "Brown"
+
+
+def test_country_codes_read_as_nationalities():
+    """The tabs share a grid, so "US" beside ThePornDB's "American" looks broken."""
+    assert stashdb._nationality({"country": "US"}) == "American"
+    assert stashdb._nationality({"country": "gb"}) == "British"
+    assert stashdb._nationality({"country": "ZZ"}) == "ZZ", "unmapped codes pass through"
+    assert stashdb._nationality({"country": ""}) is None
+    assert stashdb._nationality({}) is None
 
 
 def test_multi_word_enums_read_as_words():
@@ -135,28 +189,31 @@ def test_parse_survives_junk():
 
 
 def test_link_points_at_the_stashdb_profile():
-    assert PROFILES[0]["links"]["StashDB"].endswith(
-        "/performers/b99a587a-4b1f-4f1a-9f3a-1a2b3c4d5e6f"
+    assert SARA["links"]["StashDB"].endswith(
+        "/performers/b99a587a-1e63-409b-8c10-730088389364"
     )
+    assert SARA["links"]["StashDB"].startswith(stashdb.SITE)
 
 
 # --- matching -------------------------------------------------------------
 
 def test_exact_name_wins_over_the_fuzzy_first_hit():
-    # The fixture's second record is a different person; order must not decide.
-    reordered = [PROFILES[1], PROFILES[0]]
-    assert stashdb.best_match(reordered, "Sara Jay")["name"] == "Sara Jay"
-    assert stashdb.best_match(reordered, "sara jay")["name"] == "Sara Jay"
+    # StashDB really does answer "Sara Jay" with "Sara Jaymes" first.
+    assert PROFILES[0]["name"] == "Sara Jaymes", "the fixture keeps the real ranking"
+    assert stashdb.best_match(PROFILES, "Sara Jay")["name"] == "Sara Jay"
+    assert stashdb.best_match(PROFILES, "sara jay")["name"] == "Sara Jay"
+    assert stashdb.best_match(list(reversed(PROFILES)), "Sara Jay")["name"] == "Sara Jay"
 
 
 def test_aliases_are_matched_too():
-    assert stashdb.best_match(PROFILES, "Piera Gambetta")["name"] == "Sara Jay"
+    assert stashdb.best_match(PROFILES, "Sarah Jay")["name"] == "Sara Jay"
+    assert stashdb.best_match(PROFILES, "Sarah Jaymes")["name"] == "Sara Jaymes"
 
 
 def test_ambiguous_leftovers_are_rejected():
     # Two candidates and neither matches: showing either would be a guess.
     assert stashdb.best_match(PROFILES, "Someone Else") is None
-    assert stashdb.best_match(PROFILES[:1], "Someone Else")["name"] == "Sara Jay"
+    assert stashdb.best_match(PROFILES[:1], "Someone Else")["name"] == "Sara Jaymes"
 
 
 def test_best_match_ignores_empty_names():
@@ -177,7 +234,7 @@ def test_search_sends_the_key_and_a_parameterised_query(calls):
     assert "$names" in call["json"]["query"]
     # The name travels as a variable, never spliced into the query text.
     assert call["json"]["variables"] == {"names": "Sara Jay", "perPage": stashdb.PAGE_SIZE}
-    assert profiles[0]["name"] == "Sara Jay"
+    assert [profile["name"] for profile in profiles] == ["Sara Jaymes", "Sara Jay"]
 
 
 def test_search_is_cached_for_the_day(calls):
@@ -237,11 +294,13 @@ def test_blank_names_never_reach_the_network(calls):
 # --- rendering ------------------------------------------------------------
 
 def test_stashdb_profile_renders_through_the_shared_renderer():
-    markup = profile_html(PROFILES[0])
+    markup = profile_html(SARA)
     assert "StashDB" in markup, "the source label comes from the profile"
-    assert "36-28-44" in markup
-    assert "163 cm" in markup
+    assert "36-25-41" in markup
+    assert "163cm" in markup
+    assert "American" in markup
     assert "alias-chip" in markup
+    assert "Sarah Jay" in markup
 
 
 def test_rendered_stashdb_profile_escapes_values():
@@ -261,7 +320,8 @@ def test_rendered_stashdb_profile_escapes_values():
 
 
 def test_scene_count_shows_up_in_the_stat_grid():
-    assert dict(profile_rows(PROFILES[0]))["Scenes"] == "842"
+    assert dict(profile_rows(SARA))["Scenes"] == "570"
+    assert dict(profile_rows(SARA))["Active since"] == "2001"
 
 
 def test_profile_dialog_tabs_both_sources(monkeypatch):
@@ -282,7 +342,7 @@ def test_profile_dialog_tabs_both_sources(monkeypatch):
     monkeypatch.setenv("PORNDB_API_KEY", "test-key")
     monkeypatch.setenv("STASHDB_API_KEY", "test-key")
     monkeypatch.setattr(porndb, "lookup", lambda name, use_cache=True: porndb_profile)
-    monkeypatch.setattr(stashdb, "lookup", lambda name, use_cache=True: PROFILES[0])
+    monkeypatch.setattr(stashdb, "lookup", lambda name, use_cache=True: SARA)
 
     at = AppTest.from_file(str(APP_DIR / "app.py"), default_timeout=90)
     at.session_state["performers"] = [
@@ -296,15 +356,67 @@ def test_profile_dialog_tabs_both_sources(monkeypatch):
 
     markup = " ".join(block.value for block in at.markdown)
     assert "36E-25-41" in markup, "the ThePornDB panel"
-    assert "36-28-44" in markup, "the StashDB panel"
+    assert "36-25-41" in markup, "the StashDB panel"
 
 
 # --- live -----------------------------------------------------------------
 
 @pytest.mark.live
-@pytest.mark.skipif(not stashdb.is_configured(), reason="needs STASHDB_API_KEY")
 def test_live_lookup_returns_a_real_profile():
+    if not stashdb.is_configured():
+        pytest.skip("STASHDB_API_KEY is not configured")
+
     profile = stashdb.lookup("Sara Jay", use_cache=False)
+
     assert profile is not None
-    assert profile["name"].lower() == "sara jay"
+    assert profile["name"].lower() == "sara jay", "not the 'Sara Jaymes' ranked first"
     assert profile["links"]["StashDB"].startswith(stashdb.SITE)
+
+    extras = profile["extras"]
+    assert extras["height"].endswith("cm")
+    assert extras["measurements"].count("-") == 2
+    assert extras["nationality"]
+    assert profile["aliases"], "the alias list survives the round trip"
+    assert not any(alias.startswith("[") for alias in profile["aliases"])
+
+
+@pytest.mark.live
+def test_live_portrait_needs_no_key_to_view():
+    """The dialog shows the image in the user's browser, which has no ApiKey."""
+    if not stashdb.is_configured():
+        pytest.skip("STASHDB_API_KEY is not configured")
+
+    profile = stashdb.lookup("Sara Jay", use_cache=False)
+    response = requests.get(profile["image"], timeout=30, stream=True)
+    try:
+        assert response.status_code == 200
+        assert response.headers.get("content-type", "").startswith("image/")
+    finally:
+        response.close()
+
+
+@pytest.mark.live
+def test_live_profile_dialog_shows_both_sources():
+    """End to end: the real APIs through the real dialog."""
+    from streamlit.testing.v1 import AppTest
+    from models.performer import Performer
+    from scraper import porndb
+
+    if not porndb.is_configured() or not stashdb.is_configured():
+        pytest.skip("needs both PORNDB_API_KEY and STASHDB_API_KEY")
+
+    at = AppTest.from_file(str(APP_DIR / "app.py"), default_timeout=120)
+    at.session_state["performers"] = [
+        Performer(name="Sara Jay", slug="sara-jay", source="freeones")
+    ]
+    at.run()
+    next(button for button in at.button if button.key == "profile_sara-jay").click().run()
+
+    assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
+    assert [tab.label for tab in at.tabs] == ["ThePornDB", "StashDB"]
+
+    markup = " ".join(block.value for block in at.markdown)
+    assert "stashdb.org/images/" in markup, "the StashDB portrait"
+    assert "36E-25-41" in markup, "ThePornDB's measurements"
+    assert "36-25-41" in markup, "StashDB's band-waist-hip"
+    assert "['" not in markup, "aliases render as text, not as a repr of a list"

@@ -4,9 +4,50 @@
       "count": 2,
       "performers": [
         {
-          "id": "b99a587a-4b1f-4f1a-9f3a-1a2b3c4d5e6f",
+          "id": "5c030907-4949-4198-8af0-0eb5deddcacf",
+          "name": "Sara Jaymes",
+          "aliases": [
+            "Ara",
+            "Jessica",
+            "Jessica X",
+            "Sara",
+            "Sara E",
+            "Sara J",
+            "Sara James",
+            "Sarah",
+            "Sarah Jaymes"
+          ],
+          "birth_date": "1991-09-18",
+          "ethnicity": "CAUCASIAN",
+          "country": "US",
+          "eye_color": "BROWN",
+          "hair_color": "BLONDE",
+          "height": 163,
+          "cup_size": "A",
+          "band_size": 32,
+          "waist_size": 24,
+          "hip_size": 33,
+          "career_start_year": 2010,
+          "scene_count": 108,
+          "images": [
+            {
+              "url": "https://stashdb.org/images/611c00a8-c469-4887-881e-c4aadb5bc2d9",
+              "width": 1064,
+              "height": 1600
+            },
+            {
+              "url": "https://stashdb.org/images/a90c00e2-23f6-400f-a580-9a713b25a755",
+              "width": 1064,
+              "height": 1600
+            }
+          ]
+        },
+        {
+          "id": "b99a587a-1e63-409b-8c10-730088389364",
           "name": "Sara Jay",
-          "aliases": "Sarah Jay, Sara Jaye, Piera Gambetta",
+          "aliases": [
+            "Sarah Jay"
+          ],
           "birth_date": "1977-11-14",
           "ethnicity": "CAUCASIAN",
           "country": "US",
@@ -15,32 +56,22 @@
           "height": 163,
           "cup_size": "E",
           "band_size": 36,
-          "waist_size": 28,
-          "hip_size": 44,
-          "career_start_year": 2000,
-          "scene_count": 842,
+          "waist_size": 25,
+          "hip_size": 41,
+          "career_start_year": 2001,
+          "scene_count": 570,
           "images": [
-            {"url": "https://cdn.stashdb.org/images/performers/sara-jay-sm.jpg", "width": 320, "height": 426},
-            {"url": "https://cdn.stashdb.org/images/performers/sara-jay-lg.jpg", "width": 640, "height": 853}
+            {
+              "url": "https://stashdb.org/images/a2b03999-d3ab-430d-afdd-31c5b703e072",
+              "width": 1667,
+              "height": 2500
+            },
+            {
+              "url": "https://stashdb.org/images/798d851b-f824-4dda-8d64-8e1eb5cfa0e3",
+              "width": 1600,
+              "height": 754
+            }
           ]
-        },
-        {
-          "id": "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b",
-          "name": "Sara Fay",
-          "aliases": "",
-          "birth_date": "1988-03-02",
-          "ethnicity": "UNKNOWN",
-          "country": "CA",
-          "eye_color": null,
-          "hair_color": "BROWN",
-          "height": 170,
-          "cup_size": "C",
-          "band_size": 34,
-          "waist_size": null,
-          "hip_size": 36,
-          "career_start_year": 2012,
-          "scene_count": 120,
-          "images": []
         }
       ]
     }

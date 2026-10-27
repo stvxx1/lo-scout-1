@@ -106,9 +106,44 @@ def _pretty(value: Any) -> Optional[str]:
 
 
 def _aliases(record: Dict[str, Any]) -> List[str]:
-    """stash-box stores aliases as one comma-separated string."""
-    raw = record.get("aliases") or ""
-    return [alias.strip() for alias in str(raw).split(",") if alias.strip()]
+    """Return the record's aliases as a list.
+
+    The live schema returns a list (``["Sarah Jay"]``); older stash-box builds
+    returned one comma-separated string, and a fixture or a fork may still. Both
+    are accepted, because ``str(list)`` would produce ``"['Sarah Jay']"`` -- a
+    bracket-quoted alias chip, which is how this was found.
+    """
+    raw = record.get("aliases")
+    if isinstance(raw, list):
+        return [str(alias).strip() for alias in raw if str(alias).strip()]
+    return [alias.strip() for alias in str(raw or "").split(",") if alias.strip()]
+
+
+# stash-box stores ``country`` as an ISO code, ThePornDB as a demonym; the two
+# tabs sit side by side, so "American" next to "US" reads as a bug. The codes
+# that actually show up are mapped and anything else is shown as-is rather than
+# run through a table that pretends to be complete.
+_DEMONYMS = {
+    "AR": "Argentine", "AT": "Austrian", "AU": "Australian", "BR": "Brazilian",
+    "CA": "Canadian", "CH": "Swiss", "CL": "Chilean", "CO": "Colombian",
+    "CU": "Cuban", "CZ": "Czech", "DE": "German", "DK": "Danish",
+    "ES": "Spanish", "FI": "Finnish", "FR": "French", "GB": "British",
+    "GR": "Greek", "HU": "Hungarian", "IE": "Irish", "IL": "Israeli",
+    "IN": "Indian", "IT": "Italian", "JP": "Japanese", "KR": "Korean",
+    "MX": "Mexican", "NL": "Dutch", "NO": "Norwegian", "NZ": "New Zealander",
+    "PH": "Filipino", "PL": "Polish", "PR": "Puerto Rican", "PT": "Portuguese",
+    "RO": "Romanian", "RS": "Serbian", "RU": "Russian", "SE": "Swedish",
+    "SK": "Slovak", "TH": "Thai", "TR": "Turkish", "UA": "Ukrainian",
+    "UK": "British", "US": "American", "VE": "Venezuelan", "ZA": "South African",
+}
+
+
+def _nationality(record: Dict[str, Any]) -> Optional[str]:
+    code = str(record.get("country") or "").strip().upper()
+    if not code:
+        return None
+    return _DEMONYMS.get(code, code)
+
 
 
 def _measurements(record: Dict[str, Any]) -> Optional[str]:
@@ -135,9 +170,13 @@ def to_profile(record: Dict[str, Any]) -> Dict[str, Any]:
     extras: Dict[str, Any] = {}
     height = record.get("height")
     if isinstance(height, int) and height > 0:
-        extras["height"] = f"{height} cm"
-    if record.get("cup_size"):
-        extras["cupsize"] = str(record["cup_size"])
+        extras["height"] = f"{height}cm"  # ThePornDB's format, since the tabs share a grid
+    cup = str(record.get("cup_size") or "").strip()
+    band = record.get("band_size")
+    if cup and isinstance(band, int) and band > 0:
+        extras["cupsize"] = f"{band}{cup}"  # "36E", as ThePornDB writes it
+    elif cup:
+        extras["cupsize"] = cup
     measurements = _measurements(record)
     if measurements:
         extras["measurements"] = measurements
@@ -151,8 +190,9 @@ def to_profile(record: Dict[str, Any]) -> Dict[str, Any]:
             extras[extra_key] = pretty
     if record.get("birth_date"):
         extras["birthday"] = str(record["birth_date"])[:10]
-    if record.get("country"):
-        extras["nationality"] = str(record["country"])
+    nationality = _nationality(record)
+    if nationality:
+        extras["nationality"] = nationality
     if record.get("career_start_year"):
         extras["career_start_year"] = record["career_start_year"]
     if record.get("scene_count"):
