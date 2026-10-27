@@ -1,5 +1,16 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
+
+# Freeones expresses numeric filters as inclusive ranges on the facet name, e.g.
+#   r[appearance.metric.height]=195,215
+# Facet name -> (min field, max field, floor, ceiling, males_only).
+# Floor is the domain minimum, not 0: a 0 lower bound also matches profiles with
+# no recorded value, which floods max-only filters with unrelated results.
+RANGE_FACETS = {
+    "appearance.metric.height": ("min_height", "max_height", 100, 300, False),
+    "appearance.metric.weight": ("min_weight", "max_weight", 30, 500, False),
+    "appearance.metric.penisLength": ("min_dick_length", "max_dick_length", 1, 50, True),
+}
 
 @dataclass
 class FilterConfig:
@@ -30,16 +41,22 @@ class FilterConfig:
             "filter_mode[performerType]": "and"
         }
         
-        # Note: height, weight and dick length filters might need further investigation 
-        # for the current website structure, but we keep the mapping for now.
-        if self.min_height is not None: params["height_min"] = self.min_height
-        if self.max_height is not None: params["height_max"] = self.max_height
-        if self.min_weight is not None: params["weight_min"] = self.min_weight
-        if self.max_weight is not None: params["weight_max"] = self.max_weight
+        for facet, (min_field, max_field, floor, ceiling, males_only) in RANGE_FACETS.items():
+            if males_only and self.gender != "males":
+                continue
+
+            low = getattr(self, min_field)
+            high = getattr(self, max_field)
+
+            # An open-ended range is sent as the full extent of the facet.
+            low = floor if low is None else low
+            high = ceiling if high is None else high
+
+            if (low, high) == (floor, ceiling):
+                continue
+
+            params[f"r[{facet}]"] = f"{low},{high}"
         
-        if self.gender == "males":
-            if self.min_dick_length is not None: params["dick_length_min"] = self.min_dick_length
-            if self.max_dick_length is not None: params["dick_length_max"] = self.max_dick_length
         return params
 
     def has_filters(self) -> bool:
@@ -53,14 +70,4 @@ class FilterConfig:
             self.max_dick_length is not None
         ])
 
-    @classmethod
-    def from_streamlit_state(cls, session_state: Dict[str, Any]):
-        return cls(
-            gender=session_state.get("gender", "babes"),
-            min_height=session_state.get("min_height"),
-            max_height=session_state.get("max_height"),
-            min_weight=session_state.get("min_weight"),
-            max_weight=session_state.get("max_weight"),
-            min_dick_length=session_state.get("min_dick_length"),
-            max_dick_length=session_state.get("max_dick_length"),
-        )
+
