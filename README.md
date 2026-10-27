@@ -42,6 +42,51 @@ python3 -m venv .venv
 ./.venv/bin/pytest -q -m live    # hits freeones.com, plus any keyed source you configured
 ```
 
+## Running on Android (Termux)
+
+The code is portable on purpose: `html.parser` rather than `lxml`, `tomllib`
+(Python 3.11+, and Termux ships 3.14), `sqlite3` from the standard library, and
+Pillow imported lazily so a missing copy costs you full-size portraits rather
+than an error. The blocker is Streamlit's own dependency list — it requires
+`pyarrow` and `pandas`, neither has a Termux package, and pip cannot fall back to
+the `manylinux_aarch64` wheels because there is no glibc to match the tag. So
+`pip install streamlit` inside Termux ends in a source build of Arrow C++ that
+cannot succeed.
+
+Run inside `proot-distro` instead, where glibc makes those wheels installable:
+
+```bash
+pkg install proot-distro
+proot-distro install ubuntu
+proot-distro login ubuntu
+
+apt update && apt install -y python3 python3-venv git libjpeg62 zlib1g
+git clone https://github.com/stvxx1/lo-scout-1.git
+cd lo-scout-1
+./run.sh --server.runOnSave false
+```
+
+Then open `http://localhost:8501` in the phone's browser. Inside Ubuntu, `run.sh`
+builds the venv and installs `requirements.txt` exactly as it does on a laptop.
+
+Three things to know on a phone:
+
+- **`--server.runOnSave false` is not optional.** `.streamlit/config.toml` sets
+  `runOnSave = true`, and inotify through proot is unreliable — you get either a
+  watcher that never fires or a restart loop. Pass the flag instead of editing
+  the tracked config, or every `git pull` conflicts.
+- **Keys do not travel with the clone.** `secrets.toml` is gitignored, so
+  `export PORNDB_API_KEY=...` (and `STASHDB_API_KEY`) in the proot shell, or
+  write `.streamlit/secrets.toml` again.
+- **The database does not travel either.** `~/.lo-scout/lo-scout.db` and the
+  portrait cache stay on the old machine; favourites move across as JSON (see
+  Usage), scans and thumbnails regenerate.
+
+Keep the screen awake with `termux-wake-lock` before launching. Android 12+ may
+still reap the server as a "phantom process"; the fix is disabling phantom
+process killing (`adb shell settings put global
+settings_enable_monitor_phantom_procs false`).
+
 ## Usage
 
 ### Auto-Scan Mode
