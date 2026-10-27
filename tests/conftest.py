@@ -31,4 +31,5 @@ def isolated_home(request, tmp_path, monkeypatch):
 
     monkeypatch.setenv("LO_SCOUT_SECRETS_DIR", str(tmp_path))
     monkeypatch.delenv("PORNDB_API_KEY", raising=False)
+    monkeypatch.delenv("STASHDB_API_KEY", raising=False)
     return tmp_path

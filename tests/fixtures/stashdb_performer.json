@@ -1,0 +1,48 @@
+{
+  "data": {
+    "queryPerformers": {
+      "count": 2,
+      "performers": [
+        {
+          "id": "b99a587a-4b1f-4f1a-9f3a-1a2b3c4d5e6f",
+          "name": "Sara Jay",
+          "aliases": "Sarah Jay, Sara Jaye, Piera Gambetta",
+          "birth_date": "1977-11-14",
+          "ethnicity": "CAUCASIAN",
+          "country": "US",
+          "eye_color": "HAZEL",
+          "hair_color": "BLONDE",
+          "height": 163,
+          "cup_size": "E",
+          "band_size": 36,
+          "waist_size": 28,
+          "hip_size": 44,
+          "career_start_year": 2000,
+          "scene_count": 842,
+          "images": [
+            {"url": "https://cdn.stashdb.org/images/performers/sara-jay-sm.jpg", "width": 320, "height": 426},
+            {"url": "https://cdn.stashdb.org/images/performers/sara-jay-lg.jpg", "width": 640, "height": 853}
+          ]
+        },
+        {
+          "id": "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b",
+          "name": "Sara Fay",
+          "aliases": "",
+          "birth_date": "1988-03-02",
+          "ethnicity": "UNKNOWN",
+          "country": "CA",
+          "eye_color": null,
+          "hair_color": "BROWN",
+          "height": 170,
+          "cup_size": "C",
+          "band_size": 34,
+          "waist_size": null,
+          "hip_size": 36,
+          "career_start_year": 2012,
+          "scene_count": 120,
+          "images": []
+        }
+      ]
+    }
+  }
+}

@@ -221,10 +221,10 @@ def test_enrich_without_a_profile_changes_nothing(monkeypatch):
 
 
 def test_known_heights_and_weights_parse():
-    assert porndb._centimetres("163cm") == 163
-    assert porndb._centimetres("68kg") == 68
-    assert porndb._centimetres("") is None
-    assert porndb._centimetres(None) is None
+    assert porndb.centimetres("163cm") == 163
+    assert porndb.centimetres("68kg") == 68
+    assert porndb.centimetres("") is None
+    assert porndb.centimetres(None) is None
     assert porndb.age_from("not a date") is None
 
 

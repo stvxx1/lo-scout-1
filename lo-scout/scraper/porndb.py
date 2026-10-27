@@ -1,27 +1,23 @@
 """ThePornDB performer metadata (needs an API key).
 
-The only source here that requires a key, and the only one that carries real
-metadata: ThePornDB has portraits, stats, aliases, measurements and a bio for
-each performer, which is exactly what the Freeones *listing* pages leave blank
+The only source here that carries a full profile: portraits, stats, aliases,
+measurements and a bio -- exactly what the Freeones *listing* pages leave blank
 (they return a name and a portrait, nothing more).
 
-The key is never written into this repository. It is read, in order, from the
-``PORNDB_API_KEY`` environment variable, ``$LO_SCOUT_HOME/secrets.toml``, and
-``.streamlit/secrets.toml`` beside the working directory, the app, or the user's
-home. Without a key every function here degrades to "no metadata" rather than
-raising, so the grid keeps working for people who never configure one.
+The key is never written into this repository; see :mod:`credentials` for the
+places it is looked up. Without a key every function here degrades to "no
+metadata" rather than raising, so the grid keeps working for people who never
+configure one.
 """
 
-import os
 import re
-import tomllib
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
 
 import requests
 
+import credentials
 import storage
 
 API_ROOT = "https://api.theporndb.net"
@@ -33,66 +29,13 @@ _KEY_ENV = "PORNDB_API_KEY"
 
 # --- credentials ----------------------------------------------------------
 
-def _secret_files() -> List[Path]:
-    """Return the places a key may live, most specific first.
-
-    ``LO_SCOUT_SECRETS_DIR`` pins the search to a single directory; the tests use
-    it so a developer's real key on disk can never leak into an offline run.
-    """
-    override = os.environ.get("LO_SCOUT_SECRETS_DIR")
-    if override:
-        return [Path(override) / "secrets.toml"]
-
-    app_dir = Path(__file__).resolve().parents[1]
-    candidates = []
-    home = os.environ.get("LO_SCOUT_HOME")
-    if home:
-        candidates.append(Path(home) / "secrets.toml")
-    candidates.extend(
-        [
-            Path.cwd() / ".streamlit" / "secrets.toml",
-            app_dir / ".streamlit" / "secrets.toml",
-            app_dir.parent / ".streamlit" / "secrets.toml",
-            Path.home() / ".streamlit" / "secrets.toml",
-        ]
-    )
-    return candidates
-
-
-def _key_from_toml(path: Path) -> Optional[str]:
-    try:
-        with path.open("rb") as handle:
-            data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-
-    for key in (_KEY_ENV, "porndb_api_key"):
-        value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-
-    section = data.get("porndb")
-    if isinstance(section, dict):
-        value = section.get("api_key")
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
 def api_key() -> Optional[str]:
     """Return the configured key, or ``None`` when there isn't one."""
-    from_env = (os.environ.get(_KEY_ENV) or "").strip()
-    if from_env:
-        return from_env
-    for path in _secret_files():
-        key = _key_from_toml(path)
-        if key:
-            return key
-    return None
+    return credentials.read(_KEY_ENV)
 
 
 def is_configured() -> bool:
-    return api_key() is not None
+    return credentials.is_set(_KEY_ENV)
 
 
 # --- transport ------------------------------------------------------------
@@ -217,7 +160,7 @@ def lookup(name: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
 
 # --- enrichment -----------------------------------------------------------
 
-def _centimetres(value: Any) -> Optional[int]:
+def centimetres(value: Any) -> Optional[int]:
     """Parse "163cm" / "68kg" / 163 into a plain integer."""
     match = re.search(r"\d+(?:\.\d+)?", str(value or ""))
     return int(float(match.group())) if match else None
@@ -255,9 +198,9 @@ def enrich(performer, profile: Optional[Dict[str, Any]] = None):
     if not performer.image_url:
         performer.image_url = portrait(profile)
     if performer.height is None:
-        performer.height = _centimetres(extras.get("height"))
+        performer.height = centimetres(extras.get("height"))
     if performer.weight is None:
-        performer.weight = _centimetres(extras.get("weight"))
+        performer.weight = centimetres(extras.get("weight"))
     if performer.age is None:
         performer.age = age_from(extras.get("birthday"))
     if not performer.gender:

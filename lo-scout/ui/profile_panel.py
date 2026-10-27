@@ -1,9 +1,11 @@
 """
 Profile dialog: the metadata Freeones' listing pages don't carry.
 
-Everything shown here comes from ThePornDB, so the dialog is also where the
-"no API key" case has to be explained -- there is no other source for a bio or
-measurements.
+ThePornDB is the primary source; StashDB is shown beside it when a key for it is
+configured, because the two disagree often enough that the disagreement is
+useful (curated band/waist/hip integers versus one measurements string). This is
+also where the "no API key" case has to be explained -- there is no other source
+for a bio or measurements.
 """
 
 import html
@@ -11,7 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 import streamlit as st
 
-from scraper import porndb
+from scraper import porndb, stashdb
 
 SEARCH_URL = "https://theporndb.net/performers?q="
 
@@ -43,6 +45,7 @@ def profile_rows(profile: Dict[str, Any]) -> List[Tuple[str, str]]:
         ("Nationality", "nationality", ""),
         ("Birthplace", "birthplace", ""),
         ("Star sign", "astrology", ""),
+        ("Scenes", "scenes", ""),
     ):
         value = extras.get(key)
         if value:
@@ -59,11 +62,12 @@ def profile_rows(profile: Dict[str, Any]) -> List[Tuple[str, str]]:
     return rows
 
 
-def profile_html(profile: Dict[str, Any]) -> str:
+def profile_html(profile: Dict[str, Any], source: str = "") -> str:
     """Return the header, stat grid, bio and aliases as one escaped HTML block."""
     name = html.escape(profile.get("name", ""))
     portrait = profile.get("image") or profile.get("face") or ""
     rows = profile_rows(profile)
+    source = source or profile.get("source") or "ThePornDB"
 
     image = ""
     if portrait:
@@ -93,33 +97,67 @@ def profile_html(profile: Dict[str, Any]) -> str:
     return (
         f'<div class="profile-head">{image}'
         f'<div class="profile-identity"><h2 class="profile-name">{name}</h2>'
-        f'<div class="profile-source">ThePornDB</div></div></div>'
+        f'<div class="profile-source">{html.escape(source)}</div></div></div>'
         f"{stats_block}{bio_block}{alias_block}"
     )
+
+
+def _render_profile(profile: Dict[str, Any], source: str) -> None:
+    """Render one source's profile plus its outbound links."""
+    st.markdown(profile_html(profile, source), unsafe_allow_html=True)
+
+    links = profile.get("links") or {}
+    if not links:
+        return
+    st.markdown("---")
+    columns = st.columns(min(len(links), 4))
+    for position, (label, url) in enumerate(sorted(links.items())):
+        with columns[position % len(columns)]:
+            st.link_button(label, url, use_container_width=True)
+
+
+def _panels(name: str) -> List[Tuple[str, Dict[str, Any]]]:
+    """Return the profiles available for ``name``, primary source first."""
+    panels: List[Tuple[str, Dict[str, Any]]] = []
+    if porndb.is_configured():
+        profile = porndb.lookup(name)
+        if profile:
+            panels.append(("ThePornDB", profile))
+    if stashdb.is_configured():
+        profile = stashdb.lookup(name)
+        if profile:
+            panels.append(("StashDB", profile))
+    return panels
 
 
 @st.dialog("Profile", width="large")
 def show_profile(name: str) -> None:
     """Open the profile dialog for ``name``. Call only from a button click."""
-    if not porndb.is_configured():
+    if not porndb.is_configured() and not stashdb.is_configured():
         st.warning(
-            "No ThePornDB API key configured. Set **PORNDB_API_KEY** (environment "
+            "No metadata API key configured. Set **PORNDB_API_KEY** (environment "
             "variable or `.streamlit/secrets.toml`) and reload to see bios, "
-            "measurements and links here."
+            "measurements and links here. **STASHDB_API_KEY** adds a second source."
         )
         return
 
-    profile = porndb.lookup(name)
-    if not profile:
-        st.info(f"ThePornDB has no profile for **{html.escape(name)}**.")
+    panels = _panels(name)
+    if not panels:
+        sought = " and ".join(
+            source
+            for source, configured in (
+                ("ThePornDB", porndb.is_configured()),
+                ("StashDB", stashdb.is_configured()),
+            )
+            if configured
+        )
+        st.info(f"{sought} has no profile for **{html.escape(name)}**.")
         return
 
-    st.markdown(profile_html(profile), unsafe_allow_html=True)
+    if len(panels) == 1:
+        _render_profile(*panels[0])
+        return
 
-    links = profile.get("links") or {}
-    if links:
-        st.markdown("---")
-        columns = st.columns(min(len(links), 4))
-        for position, (label, url) in enumerate(sorted(links.items())):
-            with columns[position % len(columns)]:
-                st.link_button(label, url, use_container_width=True)
+    for tab, (source, profile) in zip(st.tabs([source for source, _ in panels]), panels):
+        with tab:
+            _render_profile(profile, source)
