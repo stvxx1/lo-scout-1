@@ -10,6 +10,25 @@ from models.performer import Performer
 from models.filters import FilterConfig
 
 
+def _ordered_range(low: Optional[int], high: Optional[int]) -> tuple:
+    """Return (low, high, was_swapped) with the pair sorted ascending."""
+    if low is not None and high is not None and low > high:
+        return high, low, True
+    return low, high, False
+
+
+def _clear_filters() -> None:
+    """Reset every filter widget.
+
+    Runs as a widget callback, i.e. before the rerun starts, so Streamlit can
+    rebuild the widgets with their defaults instead of re-instantiating widgets
+    that were already created during the current run.
+    """
+    for key in list(st.session_state.keys()):
+        if key.startswith("filter_"):
+            del st.session_state[key]
+
+
 def render_filter_sidebar() -> FilterConfig:
     """
     Render the filter sidebar with all filter controls.
@@ -69,6 +88,10 @@ def render_filter_sidebar() -> FilterConfig:
             )
             min_height = height_range[0] if height_range[0] > 0 else None
             max_height = height_range[1] if height_range[1] < 300 else None
+
+        st.caption(
+            "ℹ️ Height and weight are filtered by Freeones itself; listing cards don't show them."
+        )
         
         st.markdown("---")
         
@@ -149,18 +172,21 @@ def render_filter_sidebar() -> FilterConfig:
         st.markdown("---")
         
         # Clear filters button
-        if st.button("🗑️ Clear Filters", use_container_width=True, key="clear_filters"):
-            # Reset all filter values
-            for key in st.session_state.keys():
-                if key.startswith("filter_"):
-                    st.session_state[key] = None
-            
-            # Reset gender to default
-            st.session_state.filter_gender = "babes"
-            gender_label = "babes"
-            min_height = max_height = min_weight = max_weight = None
-            min_dick = max_dick = None
+        st.button(
+            "🗑️ Clear Filters",
+            use_container_width=True,
+            key="clear_filters",
+            on_click=_clear_filters
+        )
         
+        # Freeones rejects inverted ranges and FilterConfig raises on them, which
+        # would kill the whole app, so swap them and tell the user instead.
+        min_height, max_height, swapped_height = _ordered_range(min_height, max_height)
+        min_weight, max_weight, swapped_weight = _ordered_range(min_weight, max_weight)
+        min_dick, max_dick, swapped_length = _ordered_range(min_dick, max_dick)
+        if swapped_height or swapped_weight or swapped_length:
+            st.warning("Minimum was greater than maximum — the range was swapped.")
+
         # Build FilterConfig
         filter_config = FilterConfig(
             gender=gender_label,
