@@ -223,6 +223,85 @@ def get_css() -> str:
     .clip-thumb:hover {
         border-color: var(--accent-purple);
     }
+
+    /* Profile dialog (ui/profile_panel.py) */
+    .profile-head {
+        display: flex;
+        gap: var(--spacing-md);
+        align-items: flex-end;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .profile-portrait {
+        width: 120px;
+        aspect-ratio: 350 / 466;
+        object-fit: cover;
+        object-position: center top;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-primary);
+        flex-shrink: 0;
+    }
+
+    .profile-name {
+        margin: 0;
+        font-size: 1.6rem;
+        line-height: 1.2;
+    }
+
+    .profile-source {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .profile-stat {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+    }
+
+    .profile-stat-label {
+        display: block;
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .profile-stat-value {
+        font-size: 0.9rem;
+    }
+
+    .profile-bio {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .profile-aliases {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .alias-chip {
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid var(--border-primary);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
     
     /* Placeholder for missing images */
     .img-placeholder {

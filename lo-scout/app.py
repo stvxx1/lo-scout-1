@@ -24,8 +24,10 @@ from config import (
 )
 from scraper.freeones import FreeonesScraper
 from scraper.base import ScraperError
+from scraper import porndb
 from models.filters import FilterConfig
 from ui.theme import get_css
+from ui.profile_panel import show_profile
 from ui.video_panel import show_clips
 from ui.components import (
     render_filter_sidebar,
@@ -113,6 +115,10 @@ def load_more_performers(filters: FilterConfig) -> bool:
             filters.min_weight, filters.max_weight,
             filters.min_dick_length, filters.max_dick_length
         )
+
+        # The listing carries a name and a portrait and nothing else, so a card
+        # with no portrait means the CDN dropped it -- worth one lookup each.
+        porndb.enrich_portraits(new_performers)
 
         # Add new performers to the list (avoid duplicates)
         existing_slugs = {p.slug for p in st.session_state.performers}
@@ -364,6 +370,16 @@ def main():
                         help=f"Find clips of {performer.name} on Eporner and RedTube",
                     ):
                         show_clips(performer.name)
+
+                # Only offered when a key is configured: without one the dialog
+                # has nothing to show but an explanation.
+                if porndb.is_configured() and st.button(
+                    "ℹ️ Profile",
+                    key=f"profile_{performer.slug}",
+                    use_container_width=True,
+                    help=f"Bio, measurements and links for {performer.name}",
+                ):
+                    show_profile(performer.name)
     
     # Render pagination
     if favourites_only:

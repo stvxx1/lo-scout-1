@@ -11,6 +11,7 @@ A professional Streamlit web application for discovering adult performers with a
 - 🖼️ **Resilient Portraits**: signed Freeones CDN images, initials fallback when a host fails
 - ⭐ **Favourites**: save performers to a local sqlite db, browse them before any scan, export/import JSON
 - 🎬 **Clip Panel**: search Eporner and RedTube for a performer and play the results inline
+- ℹ️ **Profiles**: bios, measurements and aliases from ThePornDB (optional API key)
 - 🎨 **Dark Theme**: Professional seductive UI with purple and magenta accents
 - 📋 **Manual Mode**: Paste HTML source for when auto-fetch fails
 
@@ -92,6 +93,28 @@ Edit `config.py` to customize:
 - Theme colors
 - Default filter values
 
+### ThePornDB (optional)
+
+Bios, measurements, aliases and a portrait fallback come from
+[ThePornDB](https://theporndb.net), which needs a free API key. Nothing else in
+the app depends on it: without a key the Profile button is hidden and the grid
+works exactly as before.
+
+Put the key in `.streamlit/secrets.toml` (gitignored) or the environment:
+
+```toml
+PORNDB_API_KEY = "your-key-here"
+```
+
+```bash
+export PORNDB_API_KEY="your-key-here"
+```
+
+The key is read from `$PORNDB_API_KEY`, `$LO_SCOUT_HOME/secrets.toml`, or
+`.streamlit/secrets.toml` beside the app, the working directory or `~`.
+Results are cached for 24 hours, and only cards with a *missing* portrait are
+looked up (at most 6 per page), so a healthy listing costs no requests at all.
+
 ## External Sites
 
 The app generates search links for:
@@ -135,6 +158,12 @@ https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&heigh
 ### Images not loading
 - Some performers may not have images (shows placeholder)
 - Image URLs are validated before display
+- With `PORNDB_API_KEY` set, cards with no portrait fall back to ThePornDB's
+
+### Profile dialog says "No ThePornDB API key configured"
+- Set `PORNDB_API_KEY` (see Configuration) and reload the page
+- Check the key with `curl -H "Authorization: Bearer $PORNDB_API_KEY" \
+  "https://api.theporndb.net/performers?q=sara%20jay&per_page=1"`
 
 ### Filters not working
 - Ensure min values are less than max values
