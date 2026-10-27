@@ -42,10 +42,6 @@ ITEMS_PER_PAGE: int = 48  # Number of performers to load per page
 FREEONES_BASE_URL: str = "https://www.freeones.com"
 FREEONES_PERFORMERS_PATH: str = "/performers"
 
-# Default sort order for freeones
-FREEONES_SORT: str = "rank.currentRank"
-FREEONES_ORDER: str = "desc"
-
 # ===== SCRAPING SETTINGS =====
 SCRAPER_TIMEOUT: int = 30  # Request timeout in seconds
 SCRAPER_MAX_RETRIES: int = 3  # Maximum retry attempts
