@@ -2,7 +2,9 @@
 
 The caption matters as much as the grid. "Similar" without a stated basis is a
 promise the app cannot keep from a listing card; ``same gender, 157-169 cm`` is
-both true and checkable by the user.
+both true and checkable by the user. It also names the stat the window was built
+from, because the anchor can be wrong (ThePornDB's fuzzy match) and twelve
+portraits give the user nothing else to notice it by.
 """
 
 import html
@@ -31,6 +33,16 @@ def result_html(performer: Performer) -> str:
         else '<div class="similar-portrait similar-portrait-empty" aria-hidden="true"></div>'
     )
     return f'<div class="similar-head">{image}<div class="similar-name">{name}</div></div>'
+
+
+def anchor_text(profile: Dict[str, Any]) -> str:
+    """Return the stat the window was built from, e.g. ``163 cm`` (or ``""``)."""
+    extras = profile.get("extras") or {}
+    for key, unit in (("height", "cm"), ("weight", "kg")):
+        value = porndb.centimetres(extras.get(key))
+        if value:
+            return f"{value} {unit}"
+    return ""
 
 
 def _render(performers: List[Performer], columns: int = 3) -> None:
@@ -74,9 +86,20 @@ def show_similar(
     with st.spinner("Asking Freeones for the same window..."):
         results, filters = similar.find_similar(profile, exclude_slug=slug)
 
+    # Naming the anchor is not decoration: ``porndb.best_match`` can settle for a
+    # containment match, and a grid of twelve strangers gives no other clue that
+    # the window was built around the wrong person's stats.
+    source = profile.get("source") or "ThePornDB"
+    anchor = anchor_text(profile)
+    basis = (
+        f"{source}'s {anchor} for {html.escape(name)}"
+        if anchor
+        else f"{source}'s record for {html.escape(name)}"
+    )
     st.caption(
-        f"Matched on {similar.describe(filters)} -- filtered by Freeones itself, "
-        "so every performer below falls inside that range."
+        f"Matched on {similar.describe(filters)} — the window comes from {basis}. "
+        "Freeones filtered the results itself, so every performer below falls "
+        "inside that range."
     )
     if not results:
         st.warning("Nothing came back for that window. It may simply be a quiet one.")

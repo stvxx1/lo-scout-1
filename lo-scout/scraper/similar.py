@@ -81,8 +81,10 @@ def find_similar(
 
     One page only: this is a "show me alternatives" action, not a scan, and the
     results are already narrowed by the site itself. The clicked performer is
-    dropped by slug -- she is inside her own window and listing her first would
-    make the feature look like it does nothing.
+    dropped by slug when she does turn up: Freeones ranks by popularity rather
+    than by the filter, so she is usually further down -- and its own record for
+    her may not even sit inside the window ThePornDB implies, since the two
+    sources disagree about heights often enough.
     """
     filters = filters_for(profile, gender)
     if not filters.has_filters():

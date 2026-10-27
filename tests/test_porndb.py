@@ -303,6 +303,32 @@ def test_profile_button_only_appears_with_a_key(monkeypatch):
     assert any("Profile" in button.label for button in at.button)
 
 
+def test_single_source_dialog_renders_without_tabs(monkeypatch):
+    """One configured source is the default setup, and the shortcut path broke it.
+
+    ``_panels`` yields ``(source, profile)`` while ``_render_profile`` takes
+    ``(profile, source)``; unpacking the tuple blindly handed the renderer the
+    source *name*, which only shows up once a dialog is actually opened.
+    """
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("PORNDB_API_KEY", "test-key")
+    monkeypatch.setattr(porndb, "lookup", lambda name, use_cache=True: PROFILES[0])
+
+    at = AppTest.from_file(str(APP_DIR / "app.py"), default_timeout=90)
+    at.session_state["performers"] = [
+        Performer(name="Sara Jay", slug="sara-jay", source="freeones")
+    ]
+    at.run()
+    next(button for button in at.button if button.key == "profile_sara-jay").click().run()
+
+    assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
+    markup = " ".join(block.value for block in at.markdown if "profile-name" in block.value)
+    assert "Sara Jay" in markup
+    assert "ThePornDB" in markup, "the source label survives the single-panel path"
+    assert not at.tabs, "one source means no tab bar"
+
+
 # --- live -----------------------------------------------------------------
 
 @pytest.mark.live

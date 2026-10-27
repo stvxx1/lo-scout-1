@@ -150,6 +150,14 @@ def test_result_html_escapes_the_name_and_the_image():
     assert "similar-portrait" in markup
 
 
+def test_anchor_text_names_the_stat_the_window_came_from():
+    from ui.similar_panel import anchor_text
+
+    assert anchor_text(PROFILE) == "163 cm"
+    assert anchor_text({"extras": {"weight": "68kg"}}) == "68 kg"
+    assert anchor_text({"extras": {}}) == ""
+
+
 def test_result_html_survives_a_missing_portrait():
     from ui.similar_panel import result_html
 
@@ -183,6 +191,29 @@ def test_similar_button_only_appears_with_a_key(monkeypatch):
 
     assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
     assert any("Similar" in button.label for button in at.button)
+
+
+def test_profile_button_appears_with_only_a_stashdb_key(monkeypatch):
+    """StashDB is a profile source in its own right, and the cheaper key to get.
+
+    The grid used to gate its button on ThePornDB, which left a StashDB-only
+    setup with a working dialog and no way to open it.
+    """
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("STASHDB_API_KEY", "test-key")
+
+    at = AppTest.from_file(str(APP_DIR / "app.py"), default_timeout=90)
+    at.session_state["performers"] = [
+        Performer(name="Sara Jay", slug="sara-jay", source="freeones")
+    ]
+    at.run()
+
+    assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
+    assert any("Profile" in button.label for button in at.button)
+    assert not any("Similar" in button.label for button in at.button), (
+        "Similar needs ThePornDB for the anchor, not merely any key"
+    )
 
 
 def _dialog_after_click(monkeypatch, lookup):
@@ -223,10 +254,13 @@ def test_similar_dialog_renders_the_stated_window(monkeypatch):
     assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
     captions = " ".join(caption.value for caption in at.caption)
     assert "157-169 cm, 60-76 kg" in captions, "the caption must state the window"
+    assert "ThePornDB's 163 cm for Sara Jay" in captions, (
+        "the caption must name the anchor, so a wrong match is visible"
+    )
 
     markup = " ".join(block.value for block in at.markdown if "similar-head" in block.value)
     assert "Rissa May" in markup
-    assert "Sara Jay" not in markup, "she is inside her own window, but not a suggestion"
+    assert "Sara Jay" not in markup, "the clicked performer is never her own suggestion"
 
     links = [button for button in at.link_button if button.label == "Open on Freeones"]
     assert len(links) == 1

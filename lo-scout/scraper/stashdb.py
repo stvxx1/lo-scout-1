@@ -232,10 +232,12 @@ def _normalise(name: str) -> str:
 def best_match(profiles: List[Dict[str, Any]], name: str) -> Optional[Dict[str, Any]]:
     """Return the record that really is ``name``, or ``None``.
 
-    Deliberately stricter than :mod:`porndb`: stash-box name search is exact-ish,
-    so a leftover result is more likely a different person than a spelling
-    variant. An exact name wins, then an exact alias, then a lone result --
-    anything else is no match rather than a stranger's stats under this name.
+    Deliberately stricter than :mod:`porndb`: stash-box name search is fuzzy --
+    asking for "Sara Jay" returns "Sara Jaymes" first -- and unlike ThePornDB
+    there is no containment pass to fall back on, because a leftover result is
+    more likely a different person than a spelling variant. An exact name wins,
+    then an exact alias, then a lone result; anything else is no match rather
+    than a stranger's stats under this name.
     """
     wanted = _normalise(name)
     if not wanted:

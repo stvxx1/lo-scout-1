@@ -116,6 +116,16 @@ def _render_profile(profile: Dict[str, Any], source: str) -> None:
             st.link_button(label, url, use_container_width=True)
 
 
+def is_configured() -> bool:
+    """Return whether *any* profile source has a key.
+
+    The grid gates its button on this rather than on ThePornDB alone: StashDB is
+    a profile source in its own right, and gating both dialogs on one key left a
+    StashDB-only setup with a working dialog and no way to open it.
+    """
+    return porndb.is_configured() or stashdb.is_configured()
+
+
 def _panels(name: str) -> List[Tuple[str, Dict[str, Any]]]:
     """Return the profiles available for ``name``, primary source first."""
     panels: List[Tuple[str, Dict[str, Any]]] = []
@@ -133,7 +143,7 @@ def _panels(name: str) -> List[Tuple[str, Dict[str, Any]]]:
 @st.dialog("Profile", width="large")
 def show_profile(name: str) -> None:
     """Open the profile dialog for ``name``. Call only from a button click."""
-    if not porndb.is_configured() and not stashdb.is_configured():
+    if not is_configured():
         st.warning(
             "No metadata API key configured. Set **PORNDB_API_KEY** (environment "
             "variable or `.streamlit/secrets.toml`) and reload to see bios, "
@@ -155,7 +165,12 @@ def show_profile(name: str) -> None:
         return
 
     if len(panels) == 1:
-        _render_profile(*panels[0])
+        # Unpacked explicitly: ``panels`` holds (source, profile) while this
+        # renderer takes (profile, source), and ``_render_profile(*panels[0])``
+        # handed it the source name as the profile -- a crash on the commonest
+        # one-key setup, which the two-source tab tests could never catch.
+        source, profile = panels[0]
+        _render_profile(profile, source)
         return
 
     for tab, (source, profile) in zip(st.tabs([source for source, _ in panels]), panels):

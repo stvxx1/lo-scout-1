@@ -145,7 +145,9 @@ STASHDB_API_KEY = "your-key-here"
 With it, the Profile dialog gains a **StashDB** tab (curated band/waist/hip
 integers, career start year, scene count, a scene-linked portrait) and the source
 label makes clear which record you are reading. Without it, the tab simply isn't
-there.
+there. StashDB is also enough on its own: with only this key the Profile button
+appears and opens on StashDB alone, while **Find Similar** stays hidden because
+the anchor comes from ThePornDB.
 
 Values are formatted the way ThePornDB writes them (`163cm`, `36E`, `American`)
 because the two tabs share one stat grid, and a grid that reads `163cm` on one
@@ -222,8 +224,8 @@ https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&heigh
 ### Images not loading
 - Some performers may not have images (shows placeholder)
 - Image URLs are validated before display
-- With `PORNDB_API_KEY` set, cards with no portrait fall back to ThePornDB's
-  looking up that performer (at most 6 per page), so a broken source still shows faces
+- With `PORNDB_API_KEY` set, cards with no portrait are looked up on ThePornDB
+  (at most 6 per page), so a broken listing image still shows a face
 
 ### Profile dialog says "No metadata API key configured"
 - Set `PORNDB_API_KEY` (see Configuration) and reload the page

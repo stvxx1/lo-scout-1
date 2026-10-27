@@ -27,6 +27,7 @@ from scraper.base import ScraperError
 from scraper import porndb
 from models.filters import FilterConfig
 from ui.theme import get_css
+from ui.profile_panel import is_configured as profiles_configured
 from ui.profile_panel import show_profile
 from ui.similar_panel import show_similar
 from ui.video_panel import show_clips
@@ -372,11 +373,16 @@ def main():
                     ):
                         show_clips(performer.name)
 
-                # Both are offered only when a key is configured: without one
-                # each dialog has nothing to show but an explanation.
-                if porndb.is_configured():
-                    info_col, similar_col = st.columns(2)
-                    with info_col:
+                # Profile needs any keyed source; Similar needs ThePornDB, which
+                # supplies the anchor height. Freeones alone has nothing to match
+                # on, so that button is absent rather than useless.
+                if profiles_configured():
+                    if porndb.is_configured():
+                        profile_col, similar_col = st.columns(2)
+                    else:
+                        profile_col, similar_col = st.container(), None
+
+                    with profile_col:
                         if st.button(
                             "ℹ️ Profile",
                             key=f"profile_{performer.slug}",
@@ -384,14 +390,16 @@ def main():
                             help=f"Bio, measurements and links for {performer.name}",
                         ):
                             show_profile(performer.name)
-                    with similar_col:
-                        if st.button(
-                            "🔎 Similar",
-                            key=f"similar_{performer.slug}",
-                            use_container_width=True,
-                            help=f"Find performers in {performer.name}'s height range",
-                        ):
-                            show_similar(performer.name, performer.slug)
+
+                    if similar_col is not None:
+                        with similar_col:
+                            if st.button(
+                                "🔎 Similar",
+                                key=f"similar_{performer.slug}",
+                                use_container_width=True,
+                                help=f"Find performers in {performer.name}'s height range",
+                            ):
+                                show_similar(performer.name, performer.slug)
     
     # Render pagination
     if favourites_only:
