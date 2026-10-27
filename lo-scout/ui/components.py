@@ -5,9 +5,11 @@ Provides reusable UI components for the Streamlit interface.
 
 from typing import List, Dict, Any, Optional
 import html
+import json
 
 import streamlit as st
 
+import storage
 from models.performer import Performer
 from models.filters import FilterConfig
 from thumbnails import portrait_html
@@ -181,6 +183,39 @@ def render_filter_sidebar() -> FilterConfig:
             key="clear_filters",
             on_click=_clear_filters
         )
+
+        # ===== FAVOURITES =====
+        st.markdown("---")
+        st.checkbox("⭐ Favourites only", value=False, key="filter_favorites_only")
+
+        favourites = storage.list_favorites()
+        if favourites:
+            st.download_button(
+                f"⬇️ Export {len(favourites)} favourite{'s' if len(favourites) != 1 else ''}",
+                data=json.dumps(storage.export_favorites(), indent=2),
+                file_name="lo-scout-favourites.json",
+                mime="application/json",
+                use_container_width=True,
+                key="export_favorites",
+            )
+
+        uploaded = st.file_uploader(
+            "Import favourites (.json)", type=["json"], key="import_favorites_file"
+        )
+        if uploaded is not None:
+            # A re-run keeps the file in the widget, so import once per upload
+            # instead of on every interaction.
+            marker = f"{uploaded.name}:{uploaded.size}"
+            if st.session_state.get("import_favorites_marker") != marker:
+                st.session_state["import_favorites_marker"] = marker
+                try:
+                    payload = json.loads(uploaded.getvalue().decode("utf-8"))
+                    if not isinstance(payload, list):
+                        raise ValueError("expected a list of performers")
+                    added = storage.import_favorites(payload)
+                    st.success(f"Imported {added} new favourite{'s' if added != 1 else ''}.")
+                except (ValueError, UnicodeDecodeError):
+                    st.error("That file is not a LO-SCOUT favourites export.")
         
         # Freeones rejects inverted ranges and FilterConfig raises on them, which
         # would kill the whole app, so swap them and tell the user instead.

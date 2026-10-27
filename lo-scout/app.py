@@ -6,10 +6,12 @@ Professional performer discovery tool with advanced filtering.
 import streamlit as st
 import sys
 import os
+import json
 
 # Add the lo-scout directory to the path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import storage
 from config import (
     EXTERNAL_SITES,
     ITEMS_PER_PAGE,
@@ -213,6 +215,11 @@ def main():
     
     # Render filter sidebar
     filters = render_filter_sidebar()
+
+    # Favourites live in sqlite rather than in the scrape results, so they can be
+    # browsed before the first scan and survive filter changes.
+    favourites_only = st.session_state.get("filter_favorites_only", False)
+    favourites = storage.list_favorites() if favourites_only else []
     
     # Render manual paste mode in sidebar
     if ENABLE_MANUAL_PASTE_MODE:
@@ -259,7 +266,16 @@ def main():
         st.stop()
     
     # No results yet - either nothing was scanned yet, or the scan came back empty
-    if not st.session_state.performers:
+    if not st.session_state.performers and not favourites:
+        if favourites_only:
+            st.markdown(
+                render_status_message(
+                    "No favourites saved yet — tap ☆ Save under any performer.", "info"
+                ),
+                unsafe_allow_html=True,
+            )
+            st.stop()
+
         scanned = st.session_state.last_filters is not None
         if scanned and st.session_state.error_message is None:
             st.markdown(
@@ -289,8 +305,9 @@ def main():
     # Search and Sort Bar
     search_query, sort_option = render_search_sort_bar()
     
-    # Filter and Sort Logic
-    display_performers = list(st.session_state.performers)
+    # Filter and Sort Logic. In favourites mode the list comes from the store, so
+    # it can be searched and sorted without a scan.
+    display_performers = list(favourites if favourites_only else st.session_state.performers)
     
     # Apply search filter
     if search_query:
@@ -315,6 +332,9 @@ def main():
     
     # Render performer grid
     if display_performers:
+        # One query for the whole grid instead of one per card.
+        saved_slugs = storage.favorite_slugs()
+
         # Use Streamlit columns for the grid layout
         grid_cols = st.columns(4)
         
@@ -323,9 +343,26 @@ def main():
                 # Render each performer card
                 card_html = render_performer_card(performer, EXTERNAL_SITES)
                 st.markdown(card_html, unsafe_allow_html=True)
+
+                is_saved = performer.slug in saved_slugs
+                if st.button(
+                    "⭐ Saved" if is_saved else "☆ Save",
+                    key=f"fav_{performer.slug}",
+                    use_container_width=True,
+                    help="Add or remove this performer from your favourites",
+                ):
+                    storage.toggle_favorite(performer)
+                    st.rerun()
     
     # Render pagination
-    if not st.session_state.all_performers_loaded and not search_query:
+    if favourites_only:
+        st.markdown(
+            '<div style="text-align: center; color: var(--text-muted); margin: 24px 0;">'
+            '⭐ Showing your saved performers. Uncheck "Favourites only" to browse the full list.'
+            '</div>',
+            unsafe_allow_html=True
+        )
+    elif not st.session_state.all_performers_loaded and not search_query:
         # Create a container for the Load More button
         load_more_col = st.columns([1, 2, 1])
         with load_more_col[1]:
