@@ -75,6 +75,34 @@ MAX_WEIGHT_DEFAULT: int = 500
 MIN_DICK_LENGTH_DEFAULT: int = 0
 MAX_DICK_LENGTH_DEFAULT: int = 50
 
+# Age range (years). 18 is the site's own lower bound for the age facet, so a
+# slider that starts at 0 would advertise values freeones can never return.
+MIN_AGE_DEFAULT: int = 18
+MAX_AGE_DEFAULT: int = 99
+
+# ===== FREEONES SELECT FACET VOCABULARIES =====
+# Select facets take slugs rather than labels on the query string, e.g.
+#   f[ethnicity]=caucasian
+# Each map is slug -> sidebar label.
+#
+# Every slug below was checked against the live site: a real slug returns a
+# non-zero performer count, a wrong one returns an empty page rather than an
+# error, and freeones echoes any value back (junk included, with doc_count 0) --
+# so the count is the only proof a slug exists. A typo therefore looks like
+# "no performers match", not like a bug, which is why the choices are pinned
+# here instead of being retyped in the sidebar.
+ETHNICITY_OPTIONS: Dict[str, str] = {
+    "caucasian": "Caucasian",
+    "asian": "Asian",
+    "latin": "Latin",
+    "black": "Black",
+    "mixed": "Mixed",
+}
+
+# Both of these are booleans on the site -- there is no "a few tattoos" value.
+TATTOO_OPTIONS: Dict[str, str] = {"yes": "Yes", "no": "No"}
+PIERCING_OPTIONS: Dict[str, str] = {"yes": "Yes", "no": "No"}
+
 # ===== THEME COLORS =====
 THEME_COLORS: Dict[str, str] = {
     "bg_primary": "#0F0A1A",

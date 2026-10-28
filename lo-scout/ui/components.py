@@ -10,9 +10,22 @@ import json
 import streamlit as st
 
 import storage
+from config import (
+    ETHNICITY_OPTIONS,
+    MAX_AGE_DEFAULT,
+    MIN_AGE_DEFAULT,
+    PIERCING_OPTIONS,
+    TATTOO_OPTIONS,
+)
 from models.performer import Performer
 from models.filters import FilterConfig
 from thumbnails import portrait_html
+
+
+# Sentinel for the "no preference" entry of a single-choice facet widget. A
+# widget value has to be hashable and serialisable, and a string keeps None free
+# to mean "this filter is off" everywhere downstream.
+ANY_OPTION = "any"
 
 
 def _ordered_range(low: Optional[int], high: Optional[int]) -> tuple:
@@ -60,6 +73,21 @@ def render_filter_sidebar() -> FilterConfig:
         
         st.markdown("---")
         
+        # Age filter. A slider only: the full extent is what "no filter" means, so
+        # typing 18 and 99 by hand would be noise. Freeones' own floor is 18.
+        st.subheader("🎂 Age (years)")
+        age_range = st.slider(
+            "Age Range (years)",
+            min_value=MIN_AGE_DEFAULT,
+            max_value=MAX_AGE_DEFAULT,
+            value=(MIN_AGE_DEFAULT, MAX_AGE_DEFAULT),
+            key="filter_age_range"
+        )
+        min_age = age_range[0] if age_range[0] > MIN_AGE_DEFAULT else None
+        max_age = age_range[1] if age_range[1] < MAX_AGE_DEFAULT else None
+
+        st.markdown("---")
+
         # Height filter
         st.subheader("📏 Height (cm)")
         col1, col2 = st.columns(2)
@@ -176,6 +204,41 @@ def render_filter_sidebar() -> FilterConfig:
         
         st.markdown("---")
         
+        # Look filters. Single-choice on purpose: freeones reads a comma list as
+        # one unknown value (empty page) and keeps only the last of a repeated
+        # key, so a multiselect would promise more than the URL can carry -- see
+        # SELECT_FACETS in models/filters.py.
+        st.subheader("🌍 Ethnicity")
+        ethnicity_choice = st.selectbox(
+            "Ethnicity",
+            options=[ANY_OPTION] + list(ETHNICITY_OPTIONS),
+            format_func=lambda value: "Any" if value == ANY_OPTION else ETHNICITY_OPTIONS[value],
+            index=0,
+            key="filter_ethnicity"
+        )
+
+        st.subheader("🎨 Body art")
+        tattoos_choice = st.selectbox(
+            "Tattoos",
+            options=[ANY_OPTION] + list(TATTOO_OPTIONS),
+            format_func=lambda value: "Any" if value == ANY_OPTION else TATTOO_OPTIONS[value],
+            index=0,
+            key="filter_tattoos"
+        )
+        piercings_choice = st.selectbox(
+            "Piercings",
+            options=[ANY_OPTION] + list(PIERCING_OPTIONS),
+            format_func=lambda value: "Any" if value == ANY_OPTION else PIERCING_OPTIONS[value],
+            index=0,
+            key="filter_piercings"
+        )
+
+        ethnicity = None if ethnicity_choice == ANY_OPTION else ethnicity_choice
+        tattoos = None if tattoos_choice == ANY_OPTION else tattoos_choice
+        piercings = None if piercings_choice == ANY_OPTION else piercings_choice
+
+        st.markdown("---")
+
         # Clear filters button
         st.button(
             "🗑️ Clear Filters",
@@ -233,7 +296,12 @@ def render_filter_sidebar() -> FilterConfig:
             min_weight=min_weight,
             max_weight=max_weight,
             min_dick_length=min_dick,
-            max_dick_length=max_dick
+            max_dick_length=max_dick,
+            min_age=min_age,
+            max_age=max_age,
+            ethnicity=ethnicity,
+            tattoos=tattoos,
+            piercings=piercings
         )
         
         return filter_config
@@ -428,5 +496,28 @@ def render_filter_summary(filters: FilterConfig) -> str:
                 length_str += " "
             length_str += f"<={filters.max_dick_length}cm"
         badges.append(f'<span class="filter-badge"><span class="badge-label">Length:</span> {length_str}</span>')
+
+    # Age badge
+    if filters.min_age is not None or filters.max_age is not None:
+        age_str = ""
+        if filters.min_age is not None:
+            age_str += f">={filters.min_age}y"
+        if filters.max_age is not None:
+            if age_str:
+                age_str += " "
+            age_str += f"<={filters.max_age}y"
+        badges.append(f'<span class="filter-badge"><span class="badge-label">Age:</span> {age_str}</span>')
+
+    # Single-choice badges. FilterConfig has already validated the slug, so the
+    # label lookup cannot miss.
+    for label, value, options in (
+        ("Ethnicity", filters.ethnicity, ETHNICITY_OPTIONS),
+        ("Tattoos", filters.tattoos, TATTOO_OPTIONS),
+        ("Piercings", filters.piercings, PIERCING_OPTIONS),
+    ):
+        if value is not None:
+            badges.append(
+                f'<span class="filter-badge"><span class="badge-label">{label}:</span> {options[value]}</span>'
+            )
     
     return f'<div style="margin-bottom: 16px;">{"".join(badges)}</div>'

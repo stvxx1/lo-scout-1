@@ -4,7 +4,7 @@ A professional Streamlit web application for discovering adult performers with a
 
 ## Features
 
-- 🔮 **Advanced Filtering**: Filter performers by gender, height, weight, and length (for males)
+- 🔮 **Advanced Filtering**: Filter performers by gender, age, height, weight, length (for males), ethnicity, tattoos and piercings
 - 📸 **Reliable Scraping**: Multiple extraction strategies for maximum success rate
 - 🔄 **Pagination**: Load more performers with "Load More" button (24 per page, Freeones' own default)
 - 🔗 **4-Site Integration**: Search performers on XVideos, Eporner, Sxyprn, and Xmoviesforyou
@@ -92,9 +92,11 @@ settings_enable_monitor_phantom_procs false`).
 ### Auto-Scan Mode
 1. Use the sidebar to set your filters:
    - **Gender**: Babes or Males
+   - **Age**: range slider in years (18-99)
    - **Height**: Min/Max in cm
    - **Weight**: Min/Max in kg
    - **Length**: Min/Max in cm (males only)
+   - **Ethnicity**, **Tattoos**, **Piercings**: one value each, filtered by Freeones
 2. Click "🚀 RUN AUTO-SCAN" to start scanning
 3. Browse results in the 4-column grid
 4. Click "⚡ LOAD MORE" to load additional performers
@@ -242,10 +244,16 @@ The app generates search links for:
 3. **DOM Parsing**: BeautifulSoup fallback for HTML structure parsing
 
 ### Filter URL Building
-Filters are converted to freeones.com URL parameters:
+Filters become freeones.com's own facet parameters: numeric facets are inclusive
+ranges on `r[...]`, single-choice facets are slugs on `f[...]`, and page two
+onward adds `p` (robots.txt forbids `s=`, `o=` and `l=`):
 ```
-https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&height_min=160&height_max=170
+https://www.freeones.com/performers?f[performerType]=babe&r[age]=25,32&f[ethnicity]=latin&f[tattoos]=no
 ```
+
+Those slugs are not free text: an unknown value returns an empty page rather
+than an error, so the verified choices live in `config.py` and `FilterConfig`
+rejects anything else before a request is made.
 
 ### Session State Management
 - Performers list persists across page interactions
@@ -298,6 +306,11 @@ https://www.freeones.com/performers?s=rank.currentRank&o=desc&gender=babes&heigh
 ### Filters not working
 - Ensure min values are less than max values
 - Dick length filter only appears for "Males" gender
+- Ethnicity, tattoos and piercings take one value each: freeones reads a comma
+  list as a single unknown value and keeps only the last of a repeated key
+- A single-choice filter that returns nothing usually means the slug is not in
+  the site's vocabulary — the sidebar only offers the verified list from
+  `config.py`
 
 ## License
 

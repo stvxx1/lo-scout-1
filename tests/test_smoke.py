@@ -15,6 +15,7 @@ sys.path.insert(0, str(APP_DIR))
 from models.filters import FilterConfig        # noqa: E402
 from models.performer import Performer         # noqa: E402
 from scraper.freeones import FreeonesScraper   # noqa: E402
+from ui.components import ANY_OPTION, render_filter_summary  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fo_asc48.html"
 
@@ -54,6 +55,48 @@ def test_penis_length_only_for_males():
     assert "r[appearance.metric.penisLength]" not in FilterConfig(min_dick_length=18).to_url_params()
     males = FilterConfig(gender="males", min_dick_length=18).to_url_params()
     assert males["r[appearance.metric.penisLength]"] == "18,50"
+
+
+def test_age_is_a_range_facet():
+    assert FilterConfig(min_age=25, max_age=32).to_url_params()["r[age]"] == "25,32"
+
+
+def test_open_ended_age_uses_facet_bounds():
+    # 18 is freeones' own floor, so a max-only age filter must not start at 0 --
+    # that would also match profiles with no age recorded.
+    assert FilterConfig(max_age=30).to_url_params()["r[age]"] == "18,30"
+
+
+def test_select_facets_use_slug_params():
+    params = FilterConfig(ethnicity="latin", tattoos="no", piercings="yes").to_url_params()
+    assert params["f[ethnicity]"] == "latin"
+    assert params["f[tattoos]"] == "no"
+    assert params["f[piercings]"] == "yes"
+
+
+def test_select_facets_are_absent_when_unset():
+    params = FilterConfig().to_url_params()
+    for facet in ("ethnicity", "tattoos", "piercings"):
+        assert f"f[{facet}]" not in params
+
+
+def test_unknown_slug_is_rejected_before_the_site_sees_it():
+    # freeones answers an unknown slug with an empty page rather than an error,
+    # which would surface as "no performers match" and look like a bug.
+    with pytest.raises(ValueError):
+        FilterConfig(ethnicity="klingon")
+    with pytest.raises(ValueError):
+        FilterConfig(tattoos="a-few")
+
+
+def test_select_filter_alone_counts_as_active():
+    assert FilterConfig(ethnicity="caucasian").has_filters()
+    assert FilterConfig(min_age=30).has_filters()
+
+
+def test_inverted_age_range_is_rejected():
+    with pytest.raises(ValueError):
+        FilterConfig(min_age=40, max_age=30)
 
 
 # --- parsing --------------------------------------------------------------
@@ -107,6 +150,43 @@ def test_changed_filters_offer_a_rescan():
     at.run()
     assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
     assert any("APPLY FILTERS" in b.label for b in at.button)
+
+
+def test_age_and_look_filters_reach_the_config():
+    """A new widget only matters if it lands in the FilterConfig the app compares.
+
+    Comparing against an empty config is what raises APPLY FILTERS, so the button
+    appearing proves the widget value survived the sidebar round trip.
+    """
+    at = _app()
+    at.session_state["last_filters"] = FilterConfig()
+    at.session_state["performers"] = [Performer(name="Test", slug="test", source="freeones")]
+    at.session_state["filter_age_range"] = (25, 32)
+    at.session_state["filter_ethnicity"] = "latin"
+    at.session_state["filter_tattoos"] = "no"
+    at.session_state["filter_piercings"] = "yes"
+    at.run()
+    assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
+    assert any("APPLY FILTERS" in b.label for b in at.button)
+
+
+def test_clear_filters_resets_look_filters():
+    at = _app()
+    at.session_state["filter_ethnicity"] = "latin"
+    at.run()
+    [b for b in at.button if "Clear Filters" in b.label][0].click()
+    at.run()
+    assert not at.exception, [f"{e.type}: {e.value}" for e in at.exception]
+    assert at.session_state["filter_ethnicity"] == ANY_OPTION
+
+
+def test_filter_summary_lists_new_filters():
+    summary = render_filter_summary(
+        FilterConfig(min_age=25, max_age=32, ethnicity="latin", tattoos="no", piercings="yes")
+    )
+    assert ">=25y" in summary and "<=32y" in summary
+    assert "Ethnicity:" in summary and "Latin" in summary
+    assert "Tattoos:" in summary and "Piercings:" in summary
 
 
 # --- live -----------------------------------------------------------------

@@ -42,7 +42,8 @@ from ui.components import (
 
 # ===== CACHED DATA FETCHING =====
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_cached_performers(page, gender, min_height, max_height, min_weight, max_weight, min_dick, max_dick):
+def get_cached_performers(page, gender, min_height, max_height, min_weight, max_weight, min_dick, max_dick,
+                          min_age, max_age, ethnicity, tattoos, piercings):
     """Cached wrapper for fetching performers."""
     scraper = FreeonesScraper(
         timeout=SCRAPER_TIMEOUT,
@@ -57,7 +58,12 @@ def get_cached_performers(page, gender, min_height, max_height, min_weight, max_
         min_weight=min_weight,
         max_weight=max_weight,
         min_dick_length=min_dick,
-        max_dick_length=max_dick
+        max_dick_length=max_dick,
+        min_age=min_age,
+        max_age=max_age,
+        ethnicity=ethnicity,
+        tattoos=tattoos,
+        piercings=piercings
     )
     
     return scraper.fetch_performers(page=page, filters=filters)
@@ -115,7 +121,9 @@ def load_more_performers(filters: FilterConfig) -> bool:
             page,
             filters.gender, filters.min_height, filters.max_height,
             filters.min_weight, filters.max_weight,
-            filters.min_dick_length, filters.max_dick_length
+            filters.min_dick_length, filters.max_dick_length,
+            filters.min_age, filters.max_age,
+            filters.ethnicity, filters.tattoos, filters.piercings
         )
 
         # The listing carries a name and a portrait and nothing else, so a card
