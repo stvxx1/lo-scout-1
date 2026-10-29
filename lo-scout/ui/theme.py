@@ -351,9 +351,13 @@ def get_css() -> str:
         font-weight: 600;
         text-align: center;
         margin: var(--spacing-sm) 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        /* Wrap instead of clipping: real names are long, and an ellipsis made
+           two performers with the same prefix indistinguishable. The min-height
+           keeps a one-line and a two-line card the same height. */
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.2;
+        min-height: 2.4em;
     }
     
     /* ===== EXTERNAL SITE LINK BUTTONS ===== */

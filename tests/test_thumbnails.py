@@ -29,6 +29,7 @@ from thumbnails import (                                      # noqa: E402
     to_data_uri,
 )
 from ui.components import render_performer_card               # noqa: E402
+from ui.theme import get_css                                  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fo_asc48.html"
 
@@ -151,6 +152,19 @@ def test_card_uses_the_portrait_of_each_performer():
     for performer in performers[:3]:
         soup = BeautifulSoup(render_performer_card(performer, EXTERNAL_SITES), "html.parser")
         assert soup.find("img")["src"] == performer.image_url
+
+
+def test_performer_name_wraps_instead_of_being_clipped():
+    css = get_css()
+    rule = css[css.index(".performer-name {"):]
+    rule = rule[: rule.index("}")]
+
+    # Ellipsised names made two performers with a shared prefix look identical.
+    assert "white-space: normal" in rule
+    assert "text-overflow: ellipsis" not in rule
+    assert "overflow-wrap: anywhere" in rule
+    # Keeps one- and two-line cards the same height so the grid stays aligned.
+    assert "min-height: 2.4em" in rule
 
 
 # --- inlining -------------------------------------------------------------
