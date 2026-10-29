@@ -10,7 +10,7 @@ A professional Streamlit web application for discovering adult performers with a
 - 🔗 **4-Site Integration**: Search performers on XVideos, Eporner, Sxyprn, and Xmoviesforyou
 - 🖼️ **Resilient Portraits**: signed Freeones CDN images, initials fallback when a host fails
 - ⭐ **Favourites**: save performers to a local sqlite db, browse them before any scan, export/import JSON
-- 🎬 **Clip Panel**: search Eporner and RedTube for a performer and play the results inline
+- 🎬 **Clip Panel**: search Eporner, RedTube and XVideos for a performer, one tab per site, and play the results inline
 - ℹ️ **Profiles**: bios, measurements and aliases from ThePornDB (optional API key)
 - 🔎 **Find Similar**: one click returns performers inside her height/weight window, filtered by Freeones itself
 - 📚 **Second Opinion**: StashDB stats and portraits beside the ThePornDB profile (optional API key)
@@ -39,7 +39,7 @@ python3 -m venv .venv
 ```bash
 ./.venv/bin/pip install -r requirements-dev.txt
 ./.venv/bin/pytest -q            # offline, uses tests/fixtures
-./.venv/bin/pytest -q -m live    # hits freeones.com, plus any keyed source you configured
+./.venv/bin/pytest -q -m live    # hits freeones.com and the tube sites, plus any keyed source you configured
 ```
 
 ## Running on Android (Termux)
@@ -123,7 +123,8 @@ lo-scout-1/
 │   │   ├── porndb.py        # ThePornDB profiles (keyed)
 │   │   ├── stashdb.py       # StashDB profiles via GraphQL (keyed)
 │   │   ├── similar.py       # "More like her" window, built on Freeones filters
-│   │   └── videos.py        # Eporner/RedTube clip search
+│   │   ├── tubes.py         # XVideos search page scraper
+│   │   └── videos.py        # Eporner/RedTube clip search + per-site grouping
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── performer.py     # Performer data model
@@ -235,6 +236,31 @@ The app generates search links for:
 - **Eporner** (EP): High-quality adult videos
 - **Sxyprn** (SX): Adult video search engine
 - **Xmoviesforyou** (XM): Adult movie database
+
+### Clips: three sites, one tab each
+
+The clip dialog asks each site separately and renders the results in tabs, so a
+site that has nothing for a performer never hides another site's matches:
+
+| Source | How | Plays inline |
+|---|---|---|
+| Eporner | public JSON API | yes, `embed` field |
+| RedTube | public JSON API | yes, `embed_url` field |
+| XVideos | scraped search page | yes, `embedframe/<id>` |
+
+- Requests run in a thread pool and the combined result is cached for six hours,
+  so opening the dialog is one round trip to the slowest site, not a sum of three.
+- A failure is contained: any source that errors contributes an empty tab and
+  the other two still render.
+- xHamster was evaluated and left out on purpose. Its `robots.txt` disallows
+  `/embed/`, `/xembed.php` and `*embedded_video*`, and the embed URL answers
+  `410 Gone` anyway, so a tab for it could only ever be a list of outbound links.
+- XVideos is the only scraped clip source. Its `robots.txt` disallows just
+  `/video-vote/`, so the bare `/?k=<name>` search page is allowed; the parser
+  reads one page per query and never paginates. Two quirks the live markup
+  forced, both covered by `tests/fixtures/xvideos_search.html`: `.thumb-block`
+  also matches *model* cards (only blocks containing a `/video.` link count),
+  and thumbnails are lazy (the real URL is in `data-src`, `src` is a blank GIF).
 
 ## Technical Details
 

@@ -377,7 +377,7 @@ def main():
                         "🎬 Clips",
                         key=f"clips_{performer.slug}",
                         use_container_width=True,
-                        help=f"Find clips of {performer.name} on Eporner and RedTube",
+                        help=f"Find clips of {performer.name} on Eporner, RedTube and XVideos",
                     ):
                         show_clips(performer.name)
 
