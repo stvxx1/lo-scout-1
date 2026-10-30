@@ -123,7 +123,8 @@ def render_filter_sidebar() -> FilterConfig:
             max_height = height_range[1] if height_range[1] < 300 else None
 
         st.caption(
-            "ℹ️ Height and weight are filtered by Freeones itself; listing cards don't show them."
+            "ℹ️ Height and weight are filtered by Freeones itself. The cards show "
+            "age, height and weight when ThePornDB has them."
         )
         
         st.markdown("---")
@@ -334,6 +335,7 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
         ("Ethnicity", performer.ethnicity, ""),
         ("Stats", performer.measurements, ""),
         ("Height", performer.height, "cm"),
+        ("Weight", performer.weight, "kg"),
         ("Hair", performer.hair_color, ""),
     ):
         if value:
@@ -343,6 +345,19 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
             )
     
     info_overlay = f'<div class="info-overlay">{"".join(info_items)}</div>' if info_items else ""
+    
+    # At-a-glance stats. Freeones' listing carries none of this, so the values
+    # are whatever ThePornDB filled in -- any subset, and often nothing at all
+    # when no key is configured. Ints only, so nothing here needs escaping.
+    stats = []
+    if performer.age:
+        stats.append(f"{performer.age}")
+    if performer.height:
+        stats.append(f"{performer.height} cm")
+    if performer.weight:
+        stats.append(f"{performer.weight} kg")
+    stats_text = " · ".join(stats)
+    stats_html = f'<p class="performer-stats">{stats_text}</p>' if stats_text else ""
     
     # Build external link buttons
     site_class_map = {
@@ -381,6 +396,7 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
         f'<div class="performer-card">'
         f'<div class="img-box">{img_html}{info_overlay}</div>'
         f'<p class="performer-name" title="{safe_name}">{safe_name}</p>'
+        f'{stats_html}'
         f'<div class="external-links" style="margin-top: auto;">{links_html}</div>'
         f"</div>"
     )

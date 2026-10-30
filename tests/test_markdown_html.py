@@ -71,6 +71,8 @@ BUILDERS = {
             slug="sara-jay",
             image_url="https://cdn.example/sara.jpg",
             age=48,
+            height=163,
+            weight=68,
         ),
         EXTERNAL_SITES,
     ),

@@ -359,6 +359,21 @@ def get_css() -> str:
         line-height: 1.2;
         min-height: 2.4em;
     }
+
+    /* Age · height · weight under the name. The min-height reserves the line
+       whether the stats arrived or not, so a row of four buttons stays aligned
+       when ThePornDB knows some performers and not others. */
+    .performer-stats {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        text-align: center;
+        line-height: 1.2;
+        margin: 0 0 var(--spacing-xs);
+        min-height: 1.2em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     
     /* ===== EXTERNAL SITE LINK BUTTONS ===== */
     .external-links {

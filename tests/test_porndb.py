@@ -65,7 +65,7 @@ def test_without_a_key_everything_is_silently_empty():
     assert not porndb.is_configured()
     assert porndb.search("Sara Jay") == []
     assert porndb.lookup("Sara Jay") is None
-    assert porndb.enrich_portraits([Performer(name="Sara Jay", slug="sara-jay")]) == 0
+    assert porndb.enrich_stats([Performer(name="Sara Jay", slug="sara-jay")]) == 0
 
 
 # --- parsing --------------------------------------------------------------
@@ -228,24 +228,51 @@ def test_known_heights_and_weights_parse():
     assert porndb.age_from("not a date") is None
 
 
-def test_portrait_gaps_are_filled_within_the_budget(configured, monkeypatch):
+def test_stats_are_filled_on_every_card(configured, monkeypatch):
+    """The old portrait helper stopped at six; a stats grid cannot."""
     monkeypatch.setattr(porndb, "lookup", lambda name, use_cache=True: PROFILES[0])
     performers = [Performer(name=f"Performer {i}", slug=f"p{i}") for i in range(10)]
 
-    filled = porndb.enrich_portraits(performers, limit=3)
+    filled = porndb.enrich_stats(performers, max_workers=4)
 
-    assert filled == 3
-    assert [bool(p.image_url) for p in performers[:3]] == [True, True, True]
-    assert not any(p.image_url for p in performers[3:])
+    assert filled == 10
+    assert [p.height for p in performers] == [163] * 10
+    assert [p.weight for p in performers] == [68] * 10
+    assert all(p.age and p.age > 40 for p in performers)
 
 
-def test_portraits_are_not_fetched_for_cards_that_have_one(configured, monkeypatch):
+def test_stats_are_not_looked_up_without_a_key(monkeypatch):
     calls = []
     monkeypatch.setattr(porndb, "lookup", lambda name, use_cache=True: calls.append(name))
-    performers = [Performer(name="Has One", slug="has-one", image_url="https://x/y.jpg")]
 
-    assert porndb.enrich_portraits(performers) == 0
+    assert porndb.enrich_stats([Performer(name="Nobody", slug="nobody")]) == 0
     assert calls == []
+
+
+def test_one_broken_lookup_does_not_lose_the_page(configured, monkeypatch):
+    def explode(name, use_cache=True):
+        if name == "Broken":
+            raise RuntimeError("boom")
+        return PROFILES[0]
+
+    monkeypatch.setattr(porndb, "lookup", explode)
+    performers = [Performer(name="Broken", slug="broken"), Performer(name="Fine", slug="fine")]
+
+    assert porndb.enrich_stats(performers) == 1
+    assert performers[0].height is None
+    assert performers[1].height == 163
+
+
+def test_concurrent_lookups_share_the_cache_without_deadlocking(configured, monkeypatch):
+    """Eight threads writing the same sqlite key: every one must get the stats."""
+    monkeypatch.setattr(
+        porndb, "_get_json", lambda url, key: PAYLOAD
+    )
+    performers = [Performer(name="Sara Jay", slug=f"sara-jay-{i}") for i in range(16)]
+
+    assert porndb.enrich_stats(performers, max_workers=8) == 16
+    assert [p.height for p in performers] == [163] * 16
+    assert storage.cache_get(f"porndb:{porndb.normalise_name('Sara Jay')}") is not None
 
 
 # --- rendering ------------------------------------------------------------

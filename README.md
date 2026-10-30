@@ -12,6 +12,7 @@ A professional Streamlit web application for discovering adult performers with a
 - ⭐ **Favourites**: save performers to a local sqlite db, browse them before any scan, export/import JSON
 - 🎬 **Clip Panel**: search Eporner, RedTube and XVideos for a performer, one tab per site, and play the results inline
 - ℹ️ **Profiles**: bios, measurements and aliases from ThePornDB (optional API key)
+- 📊 **Stats on Every Card**: age, height and weight under each name (optional ThePornDB key)
 - 🔎 **Find Similar**: one click returns performers inside her height/weight window, filtered by Freeones itself
 - 📚 **Second Opinion**: StashDB stats and portraits beside the ThePornDB profile (optional API key)
 - 🎨 **Dark Theme**: Professional seductive UI with purple and magenta accents
@@ -173,8 +174,11 @@ export PORNDB_API_KEY="your-key-here"
 
 The key is read from `$PORNDB_API_KEY`, `$LO_SCOUT_HOME/secrets.toml`, or
 `.streamlit/secrets.toml` beside the app, the working directory or `~`.
-Results are cached for 24 hours, and only cards with a *missing* portrait are
-looked up (at most 6 per page), so a healthy listing costs no requests at all.
+Results are cached for 24 hours. The Freeones listing itself carries a name and
+a portrait and nothing else -- no age, height or weight -- so every card on the
+page costs one ThePornDB lookup (eight of them run at a time, and the sqlite
+cache covers 24 hours, misses included). A cold page adds a second or two; a
+page scanned again the same day adds nothing.
 
 The same key is what powers **Find Similar**: it supplies the anchor height and
 weight, which then become ordinary Freeones filters (`157,169` on
@@ -316,8 +320,8 @@ Indentation is not required anywhere in the output.
 ### Images not loading
 - Some performers may not have images (shows placeholder)
 - Image URLs are validated before display
-- With `PORNDB_API_KEY` set, cards with no portrait are looked up on ThePornDB
-  (at most 6 per page), so a broken listing image still shows a face
+- With `PORNDB_API_KEY` set, a broken listing image is replaced by ThePornDB's
+  portrait (the same lookup that supplies the stats under the name)
 
 ### Profile dialog says "No metadata API key configured"
 - Set `PORNDB_API_KEY` (see Configuration) and reload the page

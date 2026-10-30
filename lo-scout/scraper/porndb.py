@@ -11,6 +11,8 @@ configure one.
 """
 
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
@@ -23,6 +25,13 @@ import storage
 API_ROOT = "https://api.theporndb.net"
 TIMEOUT = 15
 CACHE_TTL = 24 * 3600
+
+# The lookup grid runs its requests on a thread pool, and every storage call
+# opens its own sqlite connection and re-runs ``executescript(_SCHEMA)``. Eight
+# threads doing that at once is how you get "database is locked", so cache
+# access is serialised here: the HTTP requests overlap, the few microseconds of
+# sqlite do not.
+_CACHE_LOCK = threading.Lock()
 
 _KEY_ENV = "PORNDB_API_KEY"
 
@@ -138,7 +147,8 @@ def search(name: str, limit: int = 4, use_cache: bool = True) -> List[Dict[str, 
 
     cache_key = f"porndb:{normalise_name(name)}"
     if use_cache:
-        cached = storage.cache_get(cache_key)
+        with _CACHE_LOCK:
+            cached = storage.cache_get(cache_key)
         if cached is not None:
             return cached
 
@@ -149,7 +159,8 @@ def search(name: str, limit: int = 4, use_cache: bool = True) -> List[Dict[str, 
         return []  # offline, rate-limited or a bad key: no metadata, no crash
 
     profiles = parse_search(payload, limit)
-    storage.cache_set(cache_key, profiles, CACHE_TTL)
+    with _CACHE_LOCK:
+        storage.cache_set(cache_key, profiles, CACHE_TTL)
     return profiles
 
 
@@ -216,26 +227,28 @@ def enrich(performer, profile: Optional[Dict[str, Any]] = None):
     return performer
 
 
-def enrich_portraits(performers: Iterable[Any], limit: int = 6) -> int:
-    """Give portraits to cards whose own image is missing.
+def enrich_stats(performers: Iterable[Any], max_workers: int = 8) -> int:
+    """Fill age/height/weight on every card, one cached lookup each.
 
-    Deliberately bounded: the grid shows ~24 performers and spending a request
-    on each at first paint is unacceptable, but the portrait is the one field a
-    broken source actually loses. Returns how many were filled.
+    ThePornDB is the only source that has all three: the Freeones listing
+    carries a name and a portrait and nothing else, and StashDB exposes neither
+    a weight field nor a batch filter. A lookup takes a second or so, so the
+    requests run concurrently; the 24h sqlite cache (negative results included)
+    means only a cold page pays for them. Returns how many cards gained a stat.
     """
     if not is_configured():
         return 0
 
-    filled = 0
-    for performer in performers:
-        if filled >= limit:
-            break
-        if getattr(performer, "image_url", ""):
-            continue
+    def fill(performer) -> bool:
         try:
             enrich(performer)
-            if performer.image_url:
-                filled += 1
-        except Exception:
-            continue
-    return filled
+        except Exception:  # a broken record is not worth losing the page over
+            return False
+        return bool(performer.age or performer.height or performer.weight)
+
+    performers = list(performers)
+    if not performers:
+        return 0
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        return sum(1 for gained in pool.map(fill, performers) if gained)

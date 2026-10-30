@@ -126,9 +126,11 @@ def load_more_performers(filters: FilterConfig) -> bool:
             filters.ethnicity, filters.tattoos, filters.piercings
         )
 
-        # The listing carries a name and a portrait and nothing else, so a card
-        # with no portrait means the CDN dropped it -- worth one lookup each.
-        porndb.enrich_portraits(new_performers)
+        # The listing carries a name and a portrait and nothing else -- no age,
+        # height or weight at all. ThePornDB has all three, so every card gets
+        # one lookup: eight in flight at a time, cached 24h per name (misses
+        # included), so only a cold page waits on the network.
+        porndb.enrich_stats(new_performers)
 
         # Add new performers to the list (avoid duplicates)
         existing_slugs = {p.slug for p in st.session_state.performers}
@@ -278,7 +280,7 @@ def main():
     
     # Loading state
     if st.session_state.is_loading:
-        st.markdown(render_loading_spinner("Scanning performers..."), unsafe_allow_html=True)
+        st.markdown(render_loading_spinner("Scanning performers and their stats..."), unsafe_allow_html=True)
         st.stop()
     
     # No results yet - either nothing was scanned yet, or the scan came back empty

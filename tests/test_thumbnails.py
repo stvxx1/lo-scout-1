@@ -167,6 +167,59 @@ def test_performer_name_wraps_instead_of_being_clipped():
     assert "min-height: 2.4em" in rule
 
 
+# --- stats on the card ----------------------------------------------------
+
+def test_card_shows_age_height_and_weight():
+    performer = Performer(name="Sara Jay", slug="sara-jay", age=48, height=163, weight=68)
+    soup = BeautifulSoup(render_performer_card(performer, EXTERNAL_SITES), "html.parser")
+
+    assert soup.find("p", class_="performer-stats").get_text() == "48 · 163 cm · 68 kg"
+
+
+def test_card_shows_only_the_stats_it_actually_has():
+    """ThePornDB knows some performers partially, and some not at all."""
+    performer = Performer(name="Sara Jay", slug="sara-jay", height=163)
+    soup = BeautifulSoup(render_performer_card(performer, EXTERNAL_SITES), "html.parser")
+
+    assert soup.find("p", class_="performer-stats").get_text() == "163 cm"
+
+
+def test_card_without_stats_renders_no_empty_line():
+    """No key configured must look exactly like the cards before this feature."""
+    performer = Performer(name="Sara Jay", slug="sara-jay", image_url="https://x/y.jpg")
+
+    assert "performer-stats" not in render_performer_card(performer, EXTERNAL_SITES)
+
+
+def test_stats_line_sits_between_the_name_and_the_links():
+    performer = Performer(name="Sara Jay", slug="sara-jay", age=48, height=163, weight=68)
+    html = render_performer_card(performer, EXTERNAL_SITES)
+
+    assert (
+        html.index('class="performer-name"')
+        < html.index('class="performer-stats"')
+        < html.index('class="external-links"')
+    )
+
+
+def test_weight_is_in_the_hover_overlay_too():
+    performer = Performer(name="Sara Jay", slug="sara-jay", weight=68)
+    soup = BeautifulSoup(render_performer_card(performer, EXTERNAL_SITES), "html.parser")
+
+    assert soup.find(class_="info-overlay").get_text().replace("\n", " ").strip() == "Weight: 68kg"
+
+
+def test_stats_line_reserves_its_height_when_empty():
+    css = get_css()
+    rule = css[css.index(".performer-stats {"):]
+    rule = rule[: rule.index("}")]
+
+    # Without the reservation, cards whose stats are missing sit lower than the
+    # ones that have them and a row of four Save buttons stops lining up.
+    assert "min-height: 1.2em" in rule
+    assert "text-align: center" in rule
+
+
 # --- inlining -------------------------------------------------------------
 
 def test_data_uri_refuses_oversized_payloads():
