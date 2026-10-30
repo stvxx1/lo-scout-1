@@ -361,27 +361,29 @@ def render_performer_card(performer: Performer, external_sites: List[Dict[str, A
         
         safe_url = html.escape(url, quote=True)
         safe_site = html.escape(site_name, quote=True)
-        links_html += f'''
-        <a class="tube-link {site_class}" href="{safe_url}" target="_blank" rel="noopener noreferrer" title="Search {safe_site}">
-            {site_icon}
-        </a>
-        '''
+        links_html += (
+            f'<a class="tube-link {site_class}" href="{safe_url}" target="_blank" '
+            f'rel="noopener noreferrer" title="Search {safe_site}">{site_icon}</a>'
+        )
     
     # Build card HTML. The name lands in both an attribute and a text node,
     # so it is escaped for each; unescaped quotes silently kill the <img>.
+    #
+    # One line on purpose, like links_html above: st.markdown parses this as
+    # CommonMark, and a raw-HTML block ends at the first blank line. An
+    # indented multi-line template used to leave whitespace-only lines behind
+    # (an empty info_overlay, the gaps between link icons), which silently cut
+    # everything after the portrait -- the name and every link vanished while
+    # the card still rendered. Keep this string free of blank lines and of
+    # lines indented four or more spaces, or the same truncation comes back.
     safe_name = html.escape(performer.name, quote=True)
-    card_html = f'''
-    <div class="performer-card">
-        <div class="img-box">
-            {img_html}
-            {info_overlay}
-        </div>
-        <p class="performer-name" title="{safe_name}">{safe_name}</p>
-        <div class="external-links" style="margin-top: auto;">
-            {links_html}
-        </div>
-    </div>
-    '''
+    card_html = (
+        f'<div class="performer-card">'
+        f'<div class="img-box">{img_html}{info_overlay}</div>'
+        f'<p class="performer-name" title="{safe_name}">{safe_name}</p>'
+        f'<div class="external-links" style="margin-top: auto;">{links_html}</div>'
+        f"</div>"
+    )
     
     return card_html
 

@@ -286,6 +286,19 @@ rejects anything else before a request is made.
 - Pagination state tracked for "Load More" functionality
 - Filter state maintained during session
 
+### Card Markup: One Line, On Purpose
+`st.markdown` renders markdown, and raw HTML in markdown ends at the first
+blank line (a line indented four or more spaces becomes a code block instead).
+An indented, multi-line card template therefore used to leak its tail: with an
+empty info overlay -- every Freeones search result -- the name and the four
+site buttons were parsed as markup *source* in a code block, on top of the
+portrait, and the card looked like it had never rendered them at all.
+
+`render_performer_card` and its link list are built as single unbroken strings
+for this reason. `tests/test_markdown_html.py` fails if any HTML handed to
+`st.markdown` grows a blank line *between* its first and last non-blank line.
+Indentation is not required anywhere in the output.
+
 ## Dependencies
 
 - **streamlit**: Web application framework
